@@ -82,21 +82,6 @@ so there's no virtualenv to activate. Add a dependency with
 `uv add <pkg>` (or `uv add --group dev <pkg>` for tooling); commit
 `pyproject.toml` and `uv.lock` together.
 
-### Releases
-
-Tags and releases are managed from GitHub directly — no `git tag` needed.
-
-1. **Releases** → *Draft a new release*.
-2. Type a new tag (e.g. `v0.1.0`) and pick *Create new tag on publish*.
-3. Fill in the title and notes, then **Publish release**.
-
-Publishing fires `.github/workflows/build-all.yml`, which builds all three
-platforms in parallel and uploads the archives to that release.
-
-To dry-run without cutting a release, run *Build All* manually from the
-**Actions** tab — the archives end up as run artifacts. To build one
-platform locally, see `scripts/build_linux.sh`, `scripts/build_macos.sh`,
-or `scripts/build_windows.ps1`.
 
 ## License
 
