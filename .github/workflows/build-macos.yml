@@ -1,0 +1,80 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  build:
+    name: Build macOS .app (unsigned)
+    # macos-latest is currently Apple Silicon (arm64). The produced .app is
+    # arm64-only -- Intel users would need a separate matrix entry on macos-13.
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+          python -m pip install pyinstaller
+
+      - name: Install ffmpeg via Homebrew
+        # macos-latest has Homebrew preinstalled; ffmpeg is sometimes already
+        # cached in the runner image. PyInstaller will follow the dylib
+        # dependencies and bundle them into the .app's Frameworks folder.
+        run: |
+          brew update --quiet
+          brew install ffmpeg
+          mkdir -p build/ffmpeg-bin
+          BREW_PREFIX="$(brew --prefix)"
+          cp "$BREW_PREFIX/bin/ffmpeg"  build/ffmpeg-bin/
+          cp "$BREW_PREFIX/bin/ffprobe" build/ffmpeg-bin/
+          chmod +x build/ffmpeg-bin/*
+
+      - name: Run PyInstaller
+        run: python -m PyInstaller --noconfirm --clean --workpath build/build --distpath dist build/mp3-yt-cutter.spec
+
+      - name: Verify .app was produced
+        run: |
+          test -d dist/mp3-yt-cutter.app || { echo "Missing dist/mp3-yt-cutter.app"; exit 1; }
+          ls -la dist/mp3-yt-cutter.app/Contents/MacOS/
+
+      - name: Smoke test (launch + quit)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./dist/mp3-yt-cutter.app/Contents/MacOS/mp3-yt-cutter &
+          PID=$!
+          sleep 5
+          if ! kill -0 "$PID" 2>/dev/null; then
+            echo "App exited prematurely"
+            wait "$PID" || true
+            exit 1
+          fi
+          kill -TERM "$PID" 2>/dev/null || true
+          wait "$PID" 2>/dev/null || true
+          echo "App started cleanly."
+
+      - name: Zip the .app
+        # `ditto` preserves the macOS bundle structure (resource forks,
+        # symlinks in Frameworks/) where `zip` and Compress-Archive can break it.
+        run: |
+          ARCH="$(uname -m)"
+          ditto -c -k --sequesterRsrc --keepParent dist/mp3-yt-cutter.app "dist/mp3-yt-cutter-macos-${ARCH}.zip"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mp3-yt-cutter-macos
+          path: dist/mp3-yt-cutter-macos-*.zip
+          if-no-files-found: error

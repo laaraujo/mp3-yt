@@ -1,0 +1,69 @@
+name: Build All
+
+# One-stop workflow that builds Windows, Linux, and macOS in parallel and
+# (on tag push) attaches all three artifacts to a single GitHub Release.
+#
+# Triggers:
+#   * Manual run from the Actions tab ("Run workflow") -- builds all three,
+#     uploads them as artifacts on the run page, but does NOT create a release.
+#   * Pushing a tag like v0.1.0 -- builds all three and creates/updates the
+#     matching GitHub Release with all three artifacts attached.
+#
+# The per-platform workflows (build-windows.yml, build-linux.yml,
+# build-macos.yml) are reusable workflows; they remain individually
+# triggerable from the Actions tab if you ever want to test just one platform.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-windows:
+    name: Windows
+    uses: ./.github/workflows/build-windows.yml
+
+  build-linux:
+    name: Linux
+    uses: ./.github/workflows/build-linux.yml
+
+  build-macos:
+    name: macOS
+    uses: ./.github/workflows/build-macos.yml
+
+  release:
+    name: Publish GitHub Release
+    needs: [build-windows, build-linux, build-macos]
+    # Only create a release when triggered by a `v*` tag push. On manual
+    # workflow_dispatch we just leave the artifacts on the run page.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required to create/update the release
+
+    steps:
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # Each per-platform workflow uploaded an artifact with a name
+          # starting with "mp3-yt-cutter-". Merge them all into a single
+          # local folder.
+          pattern: mp3-yt-cutter-*
+          path: release-files
+          merge-multiple: true
+
+      - name: List collected files
+        run: ls -la release-files
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # github.ref_name is the tag (e.g. "v0.1.0") on a tag-push trigger.
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            release-files/mp3-yt-cutter-windows.zip
+            release-files/mp3-yt-cutter-linux-x86_64.tar.gz
+            release-files/mp3-yt-cutter-macos-*.zip
+          fail_on_unmatched_files: true

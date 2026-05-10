@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mp3-yt-cutter"
+version = "0.1.0"
+description = "Cut long MP3s (or YouTube audio) into tagged tracks via a pasted tracklist."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "lautaro" }]
+dependencies = [
+    "PySide6>=6.7,<7",
+    "mutagen>=1.47,<2",
+    "yt-dlp>=2024.8.6",
+]
+
+[project.scripts]
+mp3yt = "mp3yt.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"mp3yt.ui" = ["*.qss"]
