@@ -1,18 +1,12 @@
 #!/usr/bin/env bash
-# Build a self-contained Linux binary of yt2mp3slicer using PyInstaller.
-#
-# Uses uv (https://docs.astral.sh/uv/) to set up the build environment
-# from `uv.lock` plus the `build` dependency group (PyInstaller).
-# Downloads a static ffmpeg/ffprobe build from BtbN/FFmpeg-Builds (LGPL),
-# runs PyInstaller against build/yt2mp3slicer.spec, and produces a
-# distributable tarball.
+# Build a self-contained Linux binary with PyInstaller.
 #
 # Output:
-#   dist/yt2mp3slicer/yt2mp3slicer            the launcher binary
+#   dist/yt2mp3slicer/yt2mp3slicer            launcher binary
 #   dist/yt2mp3slicer-linux-<arch>.tar.gz     shareable archive
 #
 # Usage:
-#   ./scripts/build_linux.sh           # incremental (reuses ffmpeg + venv)
+#   ./scripts/build_linux.sh           # incremental
 #   ./scripts/build_linux.sh --clean   # rebuild from scratch
 
 set -euo pipefail
@@ -38,13 +32,9 @@ if [[ "$CLEAN" -eq 1 ]]; then
   rm -rf dist build/build build/ffmpeg-bin build/ffmpeg-extracted build/ffmpeg.tar.xz .venv
 fi
 
-# 1. Sync the project venv with runtime + build deps (PyInstaller). The
-#    same `.venv` is reused for `uv run pytest` etc; the extra build group
-#    just adds PyInstaller on top.
 echo "Syncing build environment with uv..."
 uv sync --group build
 
-# 2. Download static ffmpeg/ffprobe --------------------------------------
 FFMPEG_DIR="build/ffmpeg-bin"
 if [[ ! -x "$FFMPEG_DIR/ffmpeg" || ! -x "$FFMPEG_DIR/ffprobe" ]]; then
   echo "Downloading ffmpeg static build (BtbN, LGPL)..."
@@ -72,8 +62,7 @@ if [[ ! -x "$FFMPEG_DIR/ffmpeg" || ! -x "$FFMPEG_DIR/ffprobe" ]]; then
 
   rm -rf "$EXTRACT"
   mkdir -p "$EXTRACT"
-  # --no-same-owner: don't try to honor the archive's uid/gid (relevant when
-  # extracting as root inside a container/sandbox).
+  # --no-same-owner: don't honor archive uid/gid when extracting as root.
   tar --no-same-owner -xJf "$TARFILE" -C "$EXTRACT"
 
   BIN_DIR="$(find "$EXTRACT" -type d -name bin | head -n1)"
@@ -91,14 +80,12 @@ else
   echo "Reusing existing $FFMPEG_DIR"
 fi
 
-# 3. PyInstaller ---------------------------------------------------------
 echo "Running PyInstaller..."
 uv run pyinstaller --noconfirm --clean \
   --workpath build/build \
   --distpath dist \
   build/yt2mp3slicer.spec
 
-# 4. Tarball -------------------------------------------------------------
 DIST_DIR="dist/yt2mp3slicer"
 ARCH="$(uname -m)"
 TARBALL="dist/yt2mp3slicer-linux-${ARCH}.tar.gz"

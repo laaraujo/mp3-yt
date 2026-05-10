@@ -1,10 +1,7 @@
-"""Thin wrappers around ``ffmpeg`` and ``ffprobe`` command-line tools.
+"""Thin wrappers around the ``ffmpeg`` and ``ffprobe`` CLIs.
 
-We intentionally shell out instead of using a binding library:
-
-* ``ffmpeg`` is the de-facto standard and is required anyway by ``yt-dlp``.
-* For MP3, ``ffmpeg -c copy`` gives us frame-accurate, lossless cuts in O(seconds).
-* No extra Python wheel to maintain.
+We shell out instead of using a binding library: ffmpeg is required by
+yt-dlp anyway, and ``ffmpeg -c copy`` gives lossless MP3 cuts in seconds.
 """
 
 from __future__ import annotations
@@ -33,26 +30,22 @@ class FfmpegBinaries:
 
 
 def _bundled_search_paths() -> list[Path]:
-    """Locations to check for an app-bundled copy of ffmpeg/ffprobe.
-
-    Order matters: more specific / explicit paths first.
-    """
+    """Locations to check for an app-bundled ffmpeg/ffprobe (most-specific first)."""
     paths: list[Path] = []
 
-    # 1. Explicit override (handy for tests and portable installs).
+    # Explicit override (handy for tests and portable installs).
     override = os.environ.get("YT2MP3SLICER_FFMPEG_DIR")
     if override:
         paths.append(Path(override))
 
-    # 2. PyInstaller bundle.
-    #    In onedir mode `_MEIPASS` is the `_internal/` folder; in onefile mode
-    #    it's a temp extraction directory. Both work for our purposes.
+    # PyInstaller bundle: `_MEIPASS` is `_internal/` (onedir) or a temp
+    # extraction dir (onefile). Both work.
     if getattr(sys, "frozen", False):
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
             paths.append(Path(meipass) / "bin")
             paths.append(Path(meipass))
-        # Also try next to the executable in case someone drops binaries there.
+        # Also check next to the executable.
         exe_dir = Path(sys.executable).parent
         paths.append(exe_dir / "bin")
         paths.append(exe_dir)
@@ -67,14 +60,8 @@ def _binary_name(name: str) -> str:
 def find_binaries() -> FfmpegBinaries:
     """Locate ``ffmpeg`` and ``ffprobe``.
 
-    Looks in (in order):
-
-    1. ``YT2MP3SLICER_FFMPEG_DIR`` env var.
-    2. PyInstaller bundle (``_MEIPASS/bin`` and next to the executable).
-    3. ``PATH`` via :func:`shutil.which`.
-
-    Raises :class:`FfmpegNotFoundError` with a helpful message if either
-    binary is missing.
+    Search order: ``YT2MP3SLICER_FFMPEG_DIR`` env var → PyInstaller bundle
+    → ``PATH``. Raises :class:`FfmpegNotFoundError` if either is missing.
     """
     ffmpeg_name = _binary_name("ffmpeg")
     ffprobe_name = _binary_name("ffprobe")
@@ -134,8 +121,8 @@ def cut_segment(
 ) -> None:
     """Cut ``[start, end)`` from ``src`` to ``dest`` losslessly via stream copy.
 
-    If ``end`` is ``None`` the cut goes to the end of the file. The destination
-    parent directory must already exist; the file is overwritten if present.
+    ``end=None`` cuts to the end of the file. The destination is overwritten
+    if present and its parent directory must already exist.
     """
     if start < 0:
         raise ValueError("start must be >= 0")
@@ -144,9 +131,8 @@ def cut_segment(
 
     bins = bins or find_binaries()
 
-    # `-ss` before `-i` is the fast (input) seek; combined with `-c copy` it's
-    # near-instant. For MP3 the cut snaps to MP3 frame boundaries (~26 ms),
-    # which is plenty accurate for splitting an album rip by tracklist.
+    # `-ss` before `-i` is the fast input seek; with `-c copy` it snaps to
+    # MP3 frame boundaries (~26 ms — fine for tracklist splits).
     cmd: list[str] = [
         bins.ffmpeg,
         "-hide_banner",
@@ -160,7 +146,7 @@ def cut_segment(
         "-i", str(src),
         "-map", "0:a:0",
         "-c", "copy",
-        # Strip any inherited tags; we'll write fresh ones with mutagen later.
+        # Strip inherited tags; we write fresh ones with mutagen later.
         "-map_metadata", "-1",
         "-write_xing", "1",
         str(dest),

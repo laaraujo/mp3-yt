@@ -1,8 +1,7 @@
 """Tests for the YouTube URL validation regex.
 
-The validator gates the entire UI form (URL → all fields below light up), so
-it's worth covering the surface thoroughly: happy-path video shapes, every
-flavour of Shorts URL we want to reject, and obvious junk.
+The validator gates the entire UI form, so cover it thoroughly: happy-path
+shapes, every Shorts flavour we reject, and obvious junk.
 """
 
 from __future__ import annotations
@@ -12,7 +11,6 @@ import pytest
 from slicer.core.youtube_url import is_shorts_url, youtube_video_id
 
 
-# A canonical 11-character base64-url id used across the parametrised cases.
 _VID = "zcYVH4fYCkg"
 
 
@@ -64,8 +62,7 @@ def test_youtube_video_id_extracts_id_from_supported_urls(url: str) -> None:
 )
 def test_shorts_urls_are_flagged_and_rejected(url: str) -> None:
     assert is_shorts_url(url) is True
-    # Even though the id is technically present, we don't expose it — Shorts
-    # are not a supported source for the slicer.
+    # Shorts aren't supported, so don't expose the id.
     assert youtube_video_id(url) is None
 
 
@@ -100,14 +97,11 @@ def test_junk_urls_are_rejected(url: str) -> None:
 
 
 def test_youtube_video_id_preserves_case_and_underscore_dash() -> None:
-    """The id alphabet contains - and _ as well as mixed case; verify both
-    are returned verbatim instead of being normalised."""
+    """``-``, ``_`` and mixed case in the id are returned verbatim."""
     weird_id = "A_z-9876543"
     assert youtube_video_id(f"https://youtu.be/{weird_id}") == weird_id
 
 
 def test_youtube_video_id_returns_none_for_none_like_input() -> None:
-    # The function is documented to take a str; this just guards against a
-    # bare empty input not erroring out.
     assert youtube_video_id("") is None
     assert youtube_video_id("   \n  ") is None

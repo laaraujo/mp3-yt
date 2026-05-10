@@ -1,15 +1,4 @@
-# yt2mp3slicer — managed with uv (https://docs.astral.sh/uv/).
-#
-# Quick start (after installing uv: https://docs.astral.sh/uv/getting-started/installation/):
-#
-#   uv sync                       # create .venv with locked runtime + dev deps
-#   uv run python -m slicer       # launch the app
-#   uv run pytest                 # run the test suite
-#
-# Build/packaging deps (PyInstaller) live in their own dependency group and
-# are pulled in only by the per-platform build scripts via:
-#
-#   uv sync --group build
+# Managed with uv (https://docs.astral.sh/uv/). See README "Develop".
 
 [project]
 name = "yt2mp3slicer"
@@ -36,9 +25,8 @@ dependencies = [
     "yt-dlp>=2024.8.6",
 ]
 
-# PEP 735 dependency groups. ``dev`` is installed by default with
-# ``uv sync``; opt out with ``--no-dev`` or pick a specific group with
-# ``--group build``.
+# `dev` is installed by default with `uv sync`; `build` is opt-in via
+# `uv sync --group build` (used by the per-platform build scripts).
 [dependency-groups]
 dev = [
     "pytest>=8",
@@ -48,16 +36,10 @@ build = [
 ]
 
 [tool.uv]
-# This is an application, not a library. Skip building/installing the
-# project itself — `slicer/` is just imported from the repo root, the same
-# way PyInstaller picks it up. Avoids needing a build backend for a
-# distributable wheel we don't actually publish.
+# App, not a library: skip building/installing the project itself.
 package = false
 
 [tool.pytest.ini_options]
-# Because the project isn't installed into the venv (see ``tool.uv``),
-# the ``slicer`` package sits in the repo root and needs to be on
-# ``sys.path`` for ``from slicer.core import ...`` to resolve when pytest
-# is launched as a console script (``uv run pytest``).
+# `slicer/` lives at the repo root and isn't installed into the venv.
 pythonpath = ["."]
 testpaths = ["tests"]

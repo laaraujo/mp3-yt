@@ -1,9 +1,4 @@
-"""Tests for the filename-sanitisation helpers.
-
-Output filenames are user-visible and must round-trip safely on Windows
-(where ``< > : " / \\ | ? *`` and trailing dots are illegal), so we exercise
-the corner cases here rather than discovering them at runtime.
-"""
+"""Tests for the filename-sanitisation helpers (Windows-safe output names)."""
 
 from __future__ import annotations
 
@@ -37,8 +32,7 @@ def test_safe_filename_replaces_illegal_chars(raw: str, expected: str) -> None:
 
 
 def test_safe_filename_strips_control_chars() -> None:
-    # ``\x01`` and ``\n`` are both inside the illegal-char regex's
-    # ``\x00-\x1f`` range, so they each become ``_``.
+    # ``\x01`` and ``\n`` are both in the ``\x00-\x1f`` range → ``_``.
     assert safe_filename("Foo\x01\nBar") == "Foo__Bar"
 
 
@@ -47,31 +41,27 @@ def test_safe_filename_collapses_whitespace_and_trims() -> None:
 
 
 def test_safe_filename_strips_trailing_dots_and_spaces() -> None:
-    # Windows can't open files whose name ends with a dot or space.
+    # Windows refuses to open files ending with a dot or space.
     assert safe_filename("Trailing dots...") == "Trailing dots"
     assert safe_filename("Trailing space   ") == "Trailing space"
 
 
 def test_safe_filename_strips_alternating_trailing_dots_and_spaces() -> None:
-    """Catches the bug where a single ``.strip().strip(".")`` chain would
-    leave a trailing space behind on inputs like ``"Track . . ."``."""
+    """Single ``.strip().strip(".")`` would miss alternating trailing dots/spaces."""
     assert safe_filename("Track . . .") == "Track"
     assert safe_filename("Track . ") == "Track"
     assert safe_filename("Track .") == "Track"
 
 
 def test_safe_filename_falls_back_when_string_becomes_empty() -> None:
-    # The fallback to "track" only triggers when cleaning leaves nothing
-    # behind — empty input, pure whitespace, or pure dots.
+    # Fallback only when cleaning leaves nothing behind.
     assert safe_filename("") == "track"
     assert safe_filename("   ") == "track"
     assert safe_filename("...") == "track"
 
 
 def test_safe_filename_keeps_underscore_runs_for_all_illegal_input() -> None:
-    # An all-illegal title becomes a run of underscores rather than the
-    # generic "track" fallback. That preserves uniqueness across multiple
-    # weird tracks on the same album.
+    # Underscore run preserves uniqueness across multiple weird tracks.
     assert safe_filename("///\\\\???") == "________"
 
 
@@ -83,7 +73,7 @@ def test_safe_filename_truncates_to_max_len() -> None:
 
 
 def test_safe_filename_truncation_strips_trailing_garbage() -> None:
-    # If the truncated tail ends with a dot/space it must still be cleaned.
+    # Truncated tail ending in dot/space must still be cleaned.
     raw = ("a" * 178) + " ."
     out = safe_filename(raw, max_len=180)
     assert not out.endswith(".")
@@ -94,24 +84,21 @@ def test_safe_filename_truncation_strips_trailing_garbage() -> None:
 
 
 def test_track_filename_pads_to_total_width() -> None:
-    # 11 tracks → 2-digit prefix.
     assert track_filename(1, 11, "First")  == "01 - First.mp3"
     assert track_filename(11, 11, "Last") == "11 - Last.mp3"
 
 
 def test_track_filename_widens_for_three_digit_totals() -> None:
-    # 100+ tracks → 3-digit prefix.
     assert track_filename(1, 100, "First")   == "001 - First.mp3"
     assert track_filename(100, 100, "Last") == "100 - Last.mp3"
 
 
 def test_track_filename_minimum_width_is_two() -> None:
-    # Even a single-track album gets ``01`` rather than ``1`` for sort safety.
+    # Even single-track albums get ``01`` for sort safety.
     assert track_filename(1, 1, "Solo") == "01 - Solo.mp3"
 
 
 def test_track_filename_sanitises_title() -> None:
-    # Slashes / colons / question marks all become underscores in the body.
     assert track_filename(1, 5, "AC/DC: Live?") == "01 - AC_DC_ Live_.mp3"
 
 

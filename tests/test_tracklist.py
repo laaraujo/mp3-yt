@@ -97,13 +97,13 @@ def test_rejects_bad_timestamp_components() -> None:
     # seconds >= 60 always rejected
     with pytest.raises(TracklistError):
         parse_tracklist("0:99 Bad\n")
-    # minutes >= 60 rejected only in H:MM:SS form
+    # minutes >= 60 only rejected in H:MM:SS form
     with pytest.raises(TracklistError):
         parse_tracklist("1:99:00 Bad\n")
 
 
 def test_allows_minutes_above_60_in_mm_ss_form() -> None:
-    # Some tracklists for long videos write "90:00" instead of "1:30:00".
+    # Some long-video tracklists write "90:00" instead of "1:30:00".
     tracks = parse_tracklist("0:00 First\n90:00 Second\n")
     assert tracks[1].start == 90 * 60
 
@@ -156,7 +156,7 @@ Follow me on Twitter: @example
 
 
 def test_find_tracklist_in_text_picks_longest_increasing_run() -> None:
-    # Mixed content with a small early "decoy" group and a longer real one.
+    # Small early "decoy" group plus a longer real one further down.
     desc = """\
 Outro from previous episode at 12:30 etc.
 This part has 0:30 only one fake match.

@@ -4,24 +4,19 @@ from __future__ import annotations
 
 import re
 
-# Characters that are illegal on Windows file systems (also problematic on
-# macOS / Linux in some shells). We replace each with an underscore.
+# Illegal on Windows (and shell-hostile elsewhere); replaced with `_`.
 _ILLEGAL_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
-# Trailing dots and spaces in a filename make Windows refuse to open the file,
-# so we strip *all* of them from the end in one pass — this catches alternating
-# patterns like ``"Track . ."`` that a single ``.strip().strip(".")`` chain
-# would leave a trailing space behind in.
+# Trailing dots/spaces make Windows refuse to open the file. Strip *all* in
+# one pass to handle alternating patterns like `"Track . ."`.
 _TRAILING_DOTS_SPACES_RE = re.compile(r"[. ]+$")
 
 
 def safe_filename(name: str, *, max_len: int = 180) -> str:
-    """Return a version of ``name`` that's safe to use as a filename component.
+    """Return a filename-safe version of ``name``.
 
-    * Replaces illegal characters with ``_``.
-    * Collapses whitespace.
-    * Trims trailing dots/spaces (Windows hates those).
-    * Truncates to ``max_len`` to leave room for the extension and prefix.
+    Replaces illegal characters with ``_``, collapses whitespace, strips
+    trailing dots/spaces, and truncates to ``max_len``.
     """
     cleaned = _ILLEGAL_RE.sub("_", name)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()

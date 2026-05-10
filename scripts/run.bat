@@ -1,10 +1,5 @@
 @echo off
-REM Launch yt2mp3slicer via uv (https://docs.astral.sh/uv/).
-REM
-REM `uv run` creates/refreshes .venv from uv.lock on demand, so this
-REM works from a clean clone with no manual venv activation. The only
-REM prerequisite is having `uv` on PATH; see the README's "Develop"
-REM section for installation instructions.
+REM Launch yt2mp3slicer via uv. Requires `uv` on PATH (see README "Develop").
 
 setlocal
 cd /d "%~dp0\.."

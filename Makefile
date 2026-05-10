@@ -12,13 +12,6 @@
 #   make build-windows  Build a self-contained Windows .exe  (must run on Windows)
 #   make clean          Remove build artifacts and the local .venv
 #
-# Requires GNU Make and `uv` on PATH (https://docs.astral.sh/uv/). On
-# Windows that means GNU Make from Git Bash, MSYS2, Scoop, or Chocolatey
-# -- not Microsoft `nmake`.
-#
-# Notes:
-#   * `uv run` will create/update `.venv` on demand from `uv.lock`, so
-#     there's no need to manually activate a virtualenv first.
 
 # --- Host OS detection ----------------------------------------------------
 

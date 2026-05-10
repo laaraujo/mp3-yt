@@ -1,19 +1,8 @@
 name: Build All
 
-# One-stop workflow that builds Windows, Linux, and macOS in parallel and
-# (when a GitHub Release is published) attaches all three artifacts to it.
-#
-# Triggers:
-#   * Manual run from the Actions tab ("Run workflow") -- builds all three,
-#     uploads them as run artifacts on the run page, but does NOT touch
-#     any release.
-#   * Publishing a GitHub Release in the UI (or via `gh release create`) --
-#     builds all three and uploads the archives to that release. Tags are
-#     intentionally managed from GitHub, not pushed via local git.
-#
-# The per-platform workflows (build-windows.yml, build-linux.yml,
-# build-macos.yml) are reusable workflows; they remain individually
-# triggerable from the Actions tab if you ever want to test just one platform.
+# Builds Windows, Linux, and macOS in parallel. On `release: published` the
+# resulting archives are attached to the release; on manual `workflow_dispatch`
+# they're left as run artifacts.
 on:
   workflow_dispatch:
   release:
@@ -35,8 +24,6 @@ jobs:
   upload:
     name: Upload artifacts to GitHub Release
     needs: [build-windows, build-linux, build-macos]
-    # Only attach files when this run was triggered by publishing a release.
-    # On manual workflow_dispatch we just leave the artifacts on the run page.
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
@@ -46,9 +33,6 @@ jobs:
       - name: Download all platform artifacts
         uses: actions/download-artifact@v4
         with:
-          # Each per-platform workflow uploaded an artifact with a name
-          # starting with "yt2mp3slicer-". Merge them all into a single
-          # local folder.
           pattern: yt2mp3slicer-*
           path: release-files
           merge-multiple: true
@@ -59,10 +43,8 @@ jobs:
       - name: Attach archives to the release
         uses: softprops/action-gh-release@v2
         with:
-          # The release was created by a human in the UI (or via
-          # `gh release create`); we only upload assets to it. Don't pass
-          # `name` or `body` -- that would overwrite what the release author
-          # wrote.
+          # Don't pass `name` / `body`: the release was authored by a human
+          # and we only want to upload assets to it.
           tag_name: ${{ github.event.release.tag_name }}
           files: |
             release-files/yt2mp3slicer-windows.zip

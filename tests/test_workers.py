@@ -1,8 +1,6 @@
-"""Tests for ``slicer.workers.PipelineWorker._cut_all``.
+"""Tests for ``PipelineWorker._cut_all`` (album-subfolder convention).
 
-These exercise the album-subfolder convention without touching ffmpeg or
-the network: ``ffmpeg.probe_duration``, ``ffmpeg.cut_segment``, and
-``tagger.tag_track`` are stubbed out, and we call ``_cut_all`` directly.
+ffmpeg and the network are stubbed; we call ``_cut_all`` directly.
 """
 
 from __future__ import annotations
@@ -24,7 +22,7 @@ def _stub_ffmpeg_and_tagger(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[A
     calls: dict[str, list[Any]] = {"cut": [], "tag": []}
 
     def fake_probe_duration(_src: Path, *, bins: Any) -> float:
-        return 600.0  # 10 minutes — long enough for any test tracklist.
+        return 600.0  # long enough for any test tracklist
 
     def fake_cut_segment(
         _src: Path,
@@ -34,7 +32,7 @@ def _stub_ffmpeg_and_tagger(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[A
         *,
         bins: Any,
     ) -> None:
-        # Materialise a placeholder file so callers that stat the result work.
+        # Placeholder so callers that stat the result still work.
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(b"")
         calls["cut"].append((dest, start, end))
@@ -75,7 +73,7 @@ def _drive_cut_all(worker: PipelineWorker, tracks: list[Track]) -> dict[str, Any
     )
     worker.logLine.connect(lambda line: captured["logs"].append(line))
 
-    # ``bins`` is opaque to the stubs, so any sentinel works.
+    # ``bins`` is opaque to the stubs; any sentinel works.
     worker._cut_all(tracks, Path("/dev/null"), bins=object())  # type: ignore[arg-type]
     return captured
 
@@ -100,7 +98,7 @@ def test_cut_all_writes_into_album_subfolder(
     assert str(album_dir) in msg
     assert "All 3 tracks written to" in msg
 
-    # Cuts and tags must target the per-album folder, not the chosen root.
+    # Cuts and tags target the per-album folder, not the chosen root.
     cut_dests = [dest for dest, _start, _end in _stub_ffmpeg_and_tagger["cut"]]
     assert all(dest.parent == album_dir for dest in cut_dests)
     tag_dests = [dest for dest, _kwargs in _stub_ffmpeg_and_tagger["tag"]]
@@ -110,8 +108,7 @@ def test_cut_all_writes_into_album_subfolder(
 def test_cut_all_sanitises_album_name_for_subfolder(
     tmp_path: Path,
 ) -> None:
-    # Pick a name with characters that are illegal on Windows (`:` `?` `<>`)
-    # plus trailing dots/spaces, which the sanitiser must strip.
+    # Windows-illegal characters + trailing dots/spaces.
     job = _make_job(tmp_path, album='Live: Greatest Hits? <Vol. 1>  . ')
     worker = PipelineWorker(job)
 
@@ -121,28 +118,23 @@ def test_cut_all_sanitises_album_name_for_subfolder(
     assert len(children) == 1, f"expected exactly one album dir, got {children!r}"
     album_dir = children[0]
     assert album_dir.is_dir()
-    # The exact replacement char is ``_``; just assert nothing illegal sneaks
-    # through and the trailing junk is gone.
     name = album_dir.name
     for bad in (":", "?", "<", ">"):
         assert bad not in name
     assert not name.endswith(".") and not name.endswith(" ")
-    # And we should still recognise the core text inside.
     assert "Live" in name and "Greatest Hits" in name and "Vol. 1" in name
 
 
 def test_cut_all_falls_back_to_output_dir_when_album_blank(
     tmp_path: Path,
 ) -> None:
-    # Defensive fallback: the GUI requires a non-empty album, but if a
-    # whitespace-only one ever sneaks through, write straight into the
-    # chosen folder instead of an unhelpful ``track/`` subdirectory.
+    # Defensive fallback if a whitespace-only album sneaks past the GUI.
     job = _make_job(tmp_path, album="   ")
     worker = PipelineWorker(job)
 
     captured = _drive_cut_all(worker, _tracks())
 
-    # No subdir was created, the mp3s land directly in tmp_path.
+    # No subdir; mp3s land directly in tmp_path.
     written = sorted(p.name for p in tmp_path.iterdir())
     assert written == ["01 - Intro.mp3", "02 - Sunrise.mp3", "03 - Outro.mp3"]
 

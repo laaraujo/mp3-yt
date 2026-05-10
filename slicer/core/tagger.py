@@ -22,7 +22,6 @@ def tag_track(
     try:
         audio = EasyID3(path)
     except ID3NoHeaderError:
-        # File has no ID3 header yet; add one and try again.
         mp3 = MP3(path)
         mp3.add_tags()
         mp3.save()

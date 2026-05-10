@@ -1,9 +1,5 @@
 name: Build Windows
 
-# Triggers:
-#   * Manual run from the Actions tab ("Run workflow")
-#   * Called from the `Build All` orchestrator (build-all.yml) when a
-#     GitHub Release is published
 on:
   workflow_dispatch:
   workflow_call:
@@ -18,8 +14,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install uv
-        # Provides `uv` on PATH and caches the uv-managed Python interpreter
-        # plus the package cache between runs.
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -56,8 +50,7 @@ jobs:
 
       - name: Smoke test (start + quit headless)
         shell: pwsh
-        # Confirms the bundled exe at least imports without missing-DLL
-        # errors. We force exit via QT_QPA_PLATFORM=minimal and a SIGINT.
+        # Confirms the bundled .exe imports without missing-DLL errors.
         run: |
           $env:QT_QPA_PLATFORM = "minimal"
           $proc = Start-Process -FilePath "dist/yt2mp3slicer/yt2mp3slicer.exe" -PassThru

@@ -1,9 +1,4 @@
-"""Tests for tracklist auto-detection from yt-dlp metadata.
-
-We avoid actually hitting YouTube; we drive the pure-logic helpers directly
-and monkeypatch the network-bound ``fetch_metadata`` / ``fetch_top_comments``
-helpers when exercising the full detection orchestration.
-"""
+"""Tests for tracklist auto-detection. Network helpers are monkeypatched."""
 
 from __future__ import annotations
 
@@ -106,7 +101,7 @@ def test_detect_tracklist_uses_chapters_when_present(monkeypatch) -> None:
 
     assert result.source == "chapters"
     assert [t.title for t in result.tracks] == ["Intro", "Sunrise"]
-    # Title parsed: "Some Mix - The Greatest Hits" → ("Some Mix", "The Greatest Hits").
+    # "Some Mix - The Greatest Hits" → ("Some Mix", "The Greatest Hits").
     assert result.guessed_artist == "Some Mix"
     assert result.guessed_album == "The Greatest Hits"
 
@@ -132,7 +127,7 @@ def test_detect_tracklist_falls_back_to_description(monkeypatch) -> None:
 
 
 def test_detect_tracklist_falls_back_to_top_comments(monkeypatch) -> None:
-    # Comment #1 looks like noise; comment #2 actually contains the tracklist.
+    # First comment is noise; second contains the tracklist.
     comments = [
         Comment(text="First!! banger as always", author="@first", like_count=999),
         Comment(
@@ -166,8 +161,7 @@ def test_detect_tracklist_returns_none_source_when_nothing_matches(
 
     assert result.source is None
     assert result.tracks == []
-    # Even on a miss the metadata-derived hints still come through so the UI
-    # can pre-fill the album/artist fields.
+    # Hints still come through so the UI can pre-fill album/artist.
     assert result.guessed_artist == "Some Mix"
     assert result.guessed_album == "The Greatest Hits"
 
@@ -270,7 +264,7 @@ def test_detect_status_emits_all_three_when_nothing_matches(monkeypatch) -> None
 
     detect_tracklist("http://fake", on_status=msgs.append)
 
-    # All three "Trying" messages, no "Found" message.
+    # All three "Trying"; no "Found".
     assert msgs == [
         "Trying to get tracklist from chapters…",
         "Trying to get tracklist from description…",
@@ -286,7 +280,6 @@ def test_detect_works_without_status_callback(monkeypatch) -> None:
         comments=[],
     )
 
-    # No on_status provided.
     result = detect_tracklist("http://fake")
     assert result.source == "description"
     assert len(result.tracks) == 2

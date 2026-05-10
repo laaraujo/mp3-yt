@@ -11,7 +11,7 @@ from slicer.core.ffmpeg import FfmpegNotFoundError, find_binaries
 
 
 def test_find_binaries_uses_env_override(tmp_path, monkeypatch):
-    """If YT2MP3SLICER_FFMPEG_DIR points at a folder containing both binaries, use it."""
+    """YT2MP3SLICER_FFMPEG_DIR is honored when both binaries are present."""
     suffix = ".exe" if sys.platform.startswith("win") else ""
     ff = tmp_path / f"ffmpeg{suffix}"
     fp = tmp_path / f"ffprobe{suffix}"
@@ -25,16 +25,15 @@ def test_find_binaries_uses_env_override(tmp_path, monkeypatch):
 
 
 def test_find_binaries_falls_through_when_override_dir_empty(tmp_path, monkeypatch):
-    """An override pointing at an empty dir should fall through to PATH."""
+    """Empty override dir → fall through to PATH."""
     monkeypatch.setenv("YT2MP3SLICER_FFMPEG_DIR", str(tmp_path))
-    # System ffmpeg should still be findable on the dev machine.
     bins = find_binaries()
     assert os.path.basename(bins.ffmpeg).startswith("ffmpeg")
 
 
 def test_find_binaries_raises_when_path_empty(tmp_path, monkeypatch):
-    """With an empty override dir AND a wiped PATH, we get a clear error."""
+    """Empty override + wiped PATH must raise a clear error."""
     monkeypatch.setenv("YT2MP3SLICER_FFMPEG_DIR", str(tmp_path))
-    monkeypatch.setenv("PATH", str(tmp_path))  # nothing executable here
+    monkeypatch.setenv("PATH", str(tmp_path))
     with pytest.raises(FfmpegNotFoundError):
         find_binaries()

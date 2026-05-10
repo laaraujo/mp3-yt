@@ -11,7 +11,7 @@ Accepted line shapes (whitespace-tolerant)::
     [00:00] Intro
     0:00 - Intro
 
-Blank lines and comment lines starting with ``#`` are ignored.
+Blank lines and ``#`` comments are ignored.
 """
 
 from __future__ import annotations
@@ -21,17 +21,16 @@ from dataclasses import dataclass
 from itertools import pairwise
 
 
-# Optional leading "track number" prefix: "1." / "01)" / "1 -" / "01 ".
-# Followed by a timestamp and the title (which may itself begin with - or :).
+# Optional "1." / "01)" / "1 -" prefix, then timestamp, then title.
 _LINE_RE = re.compile(
     r"""
     ^\s*
     (?:\d{1,3}\s*[.\)\]]\s+|\d{1,3}\s+-\s+)?    # optional track-number prefix
     \[?                                          # optional [ around timestamp
-    (?P<ts>\d{1,2}(?::\d{1,2}){1,2})             # the timestamp (M:SS or H:MM:SS)
+    (?P<ts>\d{1,2}(?::\d{1,2}){1,2})             # M:SS or H:MM:SS
     \]?                                          # optional ]
     \s*[-\u2013\u2014:]?\s*                      # optional separator (-, en/em dash, :)
-    (?P<title>\S.*?)                             # the title
+    (?P<title>\S.*?)                             # title
     \s*$
     """,
     re.VERBOSE,
@@ -42,17 +41,17 @@ _LINE_RE = re.compile(
 class Track:
     """A parsed tracklist entry."""
 
-    index: int          # 1-based position in the source tracklist
-    start: float        # start time in seconds
-    title: str          # cleaned-up song title
+    index: int          # 1-based position
+    start: float        # seconds
+    title: str
 
 
 class TracklistError(ValueError):
-    """Raised when the tracklist text cannot be parsed into valid tracks."""
+    """Raised when the tracklist text cannot be parsed."""
 
 
 def format_timestamp(seconds: float) -> str:
-    """Format seconds as ``M:SS`` or ``H:MM:SS`` (the canonical paste format)."""
+    """Format seconds as ``M:SS`` or ``H:MM:SS``."""
     s = max(0, round(seconds))
     h, rem = divmod(s, 3600)
     m, s = divmod(rem, 60)
@@ -62,17 +61,15 @@ def format_timestamp(seconds: float) -> str:
 
 
 def format_tracks(tracks: list[Track]) -> str:
-    """Render a list of tracks as a tracklist string editable in the UI."""
+    """Render ``tracks`` as a tracklist string editable in the UI."""
     return "\n".join(f"{format_timestamp(t.start)} {t.title}" for t in tracks)
 
 
 def find_tracklist_in_text(text: str) -> list[Track]:
-    """Lenient scanner: pull the longest strictly-increasing tracklist out of
-    arbitrary text such as a YouTube description or a pinned comment.
+    """Pull the longest strictly-increasing tracklist out of free-form text.
 
-    Unlike :func:`parse_tracklist`, this never raises: it just returns ``[]``
-    when fewer than 2 viable lines are found. Non-matching lines (links,
-    sponsor blurbs, hashtags) are simply skipped.
+    Used on YouTube descriptions and pinned comments. Returns ``[]`` when
+    fewer than 2 viable lines are found; never raises.
     """
     candidates: list[tuple[float, str]] = []
     for line in text.splitlines():
@@ -93,7 +90,7 @@ def find_tracklist_in_text(text: str) -> list[Track]:
     if len(candidates) < 2:
         return []
 
-    # Find the longest contiguous run of strictly increasing timestamps.
+    # Longest contiguous run of strictly-increasing timestamps.
     best_lo, best_hi = 0, 1
     cur_lo = 0
     for i in range(1, len(candidates)):
@@ -113,7 +110,7 @@ def find_tracklist_in_text(text: str) -> list[Track]:
 
 
 def _parse_timestamp(ts: str) -> float:
-    """Convert ``M:SS``, ``MM:SS`` or ``H:MM:SS`` into seconds (float)."""
+    """Convert ``M:SS``, ``MM:SS`` or ``H:MM:SS`` to seconds."""
     parts = ts.split(":")
     if not 2 <= len(parts) <= 3:
         raise TracklistError(f"Bad timestamp: {ts!r}")
@@ -126,7 +123,7 @@ def _parse_timestamp(ts: str) -> float:
     if len(nums) == 2:
         m, s = nums
         h = 0
-        # In MM:SS form we allow large minutes (some tracklists write "90:00").
+        # MM:SS form allows large minutes (some tracklists write "90:00").
         if s >= 60:
             raise TracklistError(f"Seconds must be <60 in: {ts!r}")
     else:
@@ -139,8 +136,8 @@ def _parse_timestamp(ts: str) -> float:
 def parse_tracklist(text: str) -> list[Track]:
     """Parse a multi-line tracklist string into a list of :class:`Track`.
 
-    Raises :class:`TracklistError` if no valid tracks were found, if any line
-    can't be parsed, or if timestamps are not strictly increasing.
+    Raises :class:`TracklistError` on empty input, unparseable lines, or
+    timestamps that aren't strictly increasing.
     """
     tracks: list[Track] = []
     for lineno, raw in enumerate(text.splitlines(), start=1):
@@ -162,8 +159,7 @@ def parse_tracklist(text: str) -> list[Track]:
     if not tracks:
         raise TracklistError("Tracklist is empty.")
 
-    # Strictly increasing timestamps; allowing equal would produce zero-length
-    # tracks which is almost certainly a typo.
+    # Strictly increasing — equal timestamps would produce zero-length tracks.
     for prev, cur in pairwise(tracks):
         if cur.start <= prev.start:
             raise TracklistError(
@@ -173,9 +169,6 @@ def parse_tracklist(text: str) -> list[Track]:
             )
 
     return tracks
-
-
-# --- helpers --------------------------------------------------------------
 
 
 _TITLE_TRIM_RE = re.compile(r"^[\s\-\u2013\u2014:]+|[\s\-\u2013\u2014:]+$")

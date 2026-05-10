@@ -1,8 +1,7 @@
 """Background worker that runs the full download/cut/tag pipeline.
 
 The worker lives on its own ``QThread`` and communicates with the GUI via
-signals. All filesystem and ffmpeg work happens off the GUI thread so the
-window stays responsive.
+signals so all filesystem and ffmpeg work happens off the GUI thread.
 """
 
 from __future__ import annotations
@@ -24,13 +23,9 @@ from slicer.core.tracklist import Track, TracklistError, parse_tracklist
 class MetadataWorker(QObject):
     """Fetches yt-dlp metadata and runs tracklist detection on a thread."""
 
-    # Emitted with the final result on success.
     detected = Signal(object)  # DetectionResult
-    # Emitted with a friendly error message on failure.
     failed = Signal(str)
-    # Emitted with short progress strings as detection moves between sources
-    # (chapters → description → top comments). The GUI shows these in the
-    # Messages list so the user knows why a slow comments fetch is happening.
+    # Per-source progress strings (chapters → description → comments).
     statusChanged = Signal(str)
 
     def __init__(self, url: str, parent: QObject | None = None) -> None:
@@ -45,7 +40,7 @@ class MetadataWorker(QObject):
                 on_status=self.statusChanged.emit,
             )
         except Exception as exc:
-            # Most yt-dlp errors are quite verbose; collapse to first line.
+            # yt-dlp errors can be very long; collapse to the first line.
             msg = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
             self.failed.emit(f"Could not fetch info for that URL: {msg}")
             return
@@ -68,12 +63,10 @@ class PipelineWorker(QObject):
 
     # fraction in [0, 1], status message
     progressChanged = Signal(float, str)
-    # Rich, in-place "live" line: "45%  •  12.4 MB / 27.5 MB  •  1.8 MB/s  •  ETA 0:08"
-    # The GUI updates a single QListWidgetItem in place rather than appending.
+    # Live in-place line: "45%  •  12.4 MB / 27.5 MB  •  1.8 MB/s  •  ETA 0:08"
     progressDetail = Signal(str)
     # idx (1-based), total, title, ok, message
     trackFinished = Signal(int, int, str, bool, str)
-    # general log line
     logLine = Signal(str)
     # success: bool, summary message
     finished = Signal(bool, str)
@@ -88,8 +81,6 @@ class PipelineWorker(QObject):
         """Mark the job for cancellation. Takes effect between tracks."""
         self._cancelled = True
 
-    # ---- main entry ------------------------------------------------------
-
     @Slot()
     def run(self) -> None:
         try:
@@ -102,38 +93,33 @@ class PipelineWorker(QObject):
     def _run_inner(self) -> None:
         job = self._job
 
-        # 1. Validate ffmpeg up-front so we fail fast with a clear message.
+        # Validate ffmpeg up-front so we fail fast with a clear message.
         try:
             bins = ffmpeg.find_binaries()
         except ffmpeg.FfmpegNotFoundError as exc:
             self.finished.emit(False, str(exc))
             return
 
-        # 2. Parse the tracklist.
         try:
             tracks = parse_tracklist(job.tracklist_text)
         except TracklistError as exc:
             self.finished.emit(False, f"Tracklist error: {exc}")
             return
 
-        # 3. Download the YouTube audio to a scratch directory.
         tmp_dir = Path(tempfile.mkdtemp(prefix="yt2mp3slicer-"))
         try:
             self.logLine.emit(f"Downloading from YouTube to {tmp_dir} ...")
             from slicer.core.ytdownload import download_as_mp3
 
             def _ydl_progress(frac: float, msg: str) -> None:
-                # Map yt-dlp progress to the first ~15% of the overall bar.
+                # Map yt-dlp's progress to the first ~15% of the overall bar.
                 self.progressChanged.emit(min(frac * 0.15, 0.15), msg)
 
             def _ydl_progress_detail(text: str) -> None:
-                # Rich live line — the GUI updates in place rather than
-                # appending one item per tick.
                 self.progressDetail.emit(text)
 
-            # Point yt-dlp's FFmpegExtractAudio postprocessor at the same
-            # binaries the cutter uses; otherwise it falls back to PATH and
-            # fails inside frozen .app/.exe bundles where PATH is minimal.
+            # Point yt-dlp at the same ffmpeg the cutter uses; otherwise it
+            # falls back to PATH and fails inside frozen bundles.
             result = download_as_mp3(
                 job.youtube_url,
                 tmp_dir,
@@ -157,8 +143,6 @@ class PipelineWorker(QObject):
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    # ---- cutting ---------------------------------------------------------
-
     def _cut_all(
         self,
         tracks: list[Track],
@@ -173,7 +157,6 @@ class PipelineWorker(QObject):
             self.finished.emit(False, str(exc))
             return
 
-        # Sanity-check: the last track's start must be before the file ends.
         if tracks[-1].start >= total_duration:
             self.finished.emit(
                 False,
@@ -184,12 +167,10 @@ class PipelineWorker(QObject):
             )
             return
 
-        # Group all tracks under a per-album subfolder so multiple cuts into
-        # the same chosen folder don't pile up into one giant flat list. The
-        # album name is run through the same filename sanitiser as the track
-        # titles so it's safe on every platform; if the album field is empty
-        # (shouldn't happen — the GUI requires it — but guard anyway), we
-        # write straight into the chosen folder as before.
+        # Per-album subfolder so multiple cuts into the same chosen folder
+        # stay tidy. The album name goes through the same sanitiser as track
+        # titles. If somehow blank (the GUI requires it), write straight
+        # into the chosen folder.
         album_subdir = safe_filename(job.album.strip()) if job.album.strip() else None
         album_folder = (
             job.output_dir / album_subdir if album_subdir else job.output_dir

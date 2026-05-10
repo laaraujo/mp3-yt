@@ -1,21 +1,13 @@
 #!/usr/bin/env bash
-# Build a self-contained macOS .app of yt2mp3slicer using PyInstaller.
-#
-# Uses uv (https://docs.astral.sh/uv/) to set up the build environment
-# from `uv.lock` plus the `build` dependency group (PyInstaller).
+# Build a self-contained macOS .app with PyInstaller. ffmpeg/ffprobe come
+# from Homebrew; PyInstaller follows their dylibs into the .app bundle.
 #
 # Outputs:
-#   dist/yt2mp3slicer/yt2mp3slicer            the raw launcher (folder mode)
-#   dist/yt2mp3slicer.app                     the macOS .app bundle
-#   dist/yt2mp3slicer-macos-<arch>.zip        shareable zip of the .app
+#   dist/yt2mp3slicer.app                     macOS .app bundle
+#   dist/yt2mp3slicer-macos-<arch>.zip        shareable zip
 #
-# The .app is **unsigned and unnotarized**. On first launch users will need
-# to right-click -> Open to bypass Gatekeeper, or run:
-#   xattr -d com.apple.quarantine dist/yt2mp3slicer.app
-#
-# ffmpeg / ffprobe are sourced from Homebrew. PyInstaller follows their
-# dylib dependencies and bundles the relevant Homebrew dylibs into the
-# .app's Frameworks folder, so the resulting bundle is portable.
+# The .app is unsigned/unnotarized — first launch requires right-click → Open
+# (or `xattr -d com.apple.quarantine dist/yt2mp3slicer.app`).
 #
 # Usage:
 #   ./scripts/build_macos.sh           # incremental
@@ -33,7 +25,6 @@ case "${1:-}" in
   *) echo "Unknown argument: $1" >&2; exit 2 ;;
 esac
 
-# 1. Sanity checks -------------------------------------------------------
 if [[ "$(uname)" != "Darwin" ]]; then
   echo "build_macos.sh must be run on macOS." >&2
   exit 1
@@ -55,11 +46,9 @@ if [[ "$CLEAN" -eq 1 ]]; then
   rm -rf dist build/build build/ffmpeg-bin .venv
 fi
 
-# 2. Sync the project venv with runtime + build deps (PyInstaller).
 echo "Syncing build environment with uv..."
 uv sync --group build
 
-# 3. Pull ffmpeg/ffprobe from Homebrew ----------------------------------
 FFMPEG_DIR="build/ffmpeg-bin"
 if [[ ! -x "$FFMPEG_DIR/ffmpeg" || ! -x "$FFMPEG_DIR/ffprobe" ]]; then
   echo "Installing ffmpeg via Homebrew..."
@@ -81,14 +70,12 @@ else
   echo "Reusing existing $FFMPEG_DIR"
 fi
 
-# 4. PyInstaller ---------------------------------------------------------
 echo "Running PyInstaller..."
 uv run pyinstaller --noconfirm --clean \
   --workpath build/build \
   --distpath dist \
   build/yt2mp3slicer.spec
 
-# 5. Verify and zip the .app ---------------------------------------------
 APP="dist/yt2mp3slicer.app"
 if [[ ! -d "$APP" ]]; then
   echo "Build did not produce $APP" >&2
@@ -98,7 +85,7 @@ fi
 ARCH="$(uname -m)"
 ZIP="dist/yt2mp3slicer-macos-${ARCH}.zip"
 
-# Use ditto so resource forks and symlinks (Frameworks/) are preserved.
+# `ditto` preserves resource forks and symlinks (Frameworks/) where `zip` can't.
 rm -f "$ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 

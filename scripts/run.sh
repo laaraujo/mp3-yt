@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
-# Launch yt2mp3slicer via uv (https://docs.astral.sh/uv/).
-#
-# `uv run` will create/refresh `.venv` from `uv.lock` if needed, so this
-# works from a clean clone with no manual venv activation. The only
-# prerequisite is having `uv` on PATH; see the README's "Develop" section
-# for installation instructions.
+# Launch yt2mp3slicer via uv. Requires `uv` on PATH (see README "Develop").
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
