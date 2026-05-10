@@ -29,6 +29,7 @@ dependencies = [
 # `uv sync --group build` (used by the per-platform build scripts).
 [dependency-groups]
 dev = [
+    "pre-commit>=4.6.0",
     "pytest>=8",
 ]
 build = [
@@ -43,3 +44,41 @@ package = false
 # `slicer/` lives at the repo root and isn't installed into the venv.
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff]
+fix = true
+line-length = 120
+
+[tool.ruff.lint]
+# N802/N815: PySide6 / Qt requires camelCase for Signal() declarations and
+# event-handler overrides (closeEvent etc.) — Qt dispatches by exact method
+# name, so renaming silently breaks behavior. Disabled project-wide since
+# this is a Qt app.
+ignore = ["PTH123", "PTH118", "TC003", "TC002", "TD002", "TD003", "N802", "N815"]
+extend-select = [
+    "F",        # Pyflakes rules
+    "W",        # PyCodeStyle warnings
+    "E",        # PyCodeStyle errors
+    "I",        # Sort imports properly
+    "UP",       # Warn if certain things can changed due to newer Python versions
+    "C4",       # Catch incorrect use of comprehensions, dict, list, etc
+    "FA",       # Enforce from __future__ import annotations
+    "ISC",      # Good use of string concatenation
+    "ICN",      # Use common import conventions
+    "SIM",      # Common simplification rules
+    "TID",      # Some good import practices
+    "TC",       # Enforce importing certain types in a TYPE_CHECKING block
+    "PTH",      # Use pathlib instead of os.path
+    "TD",       # Be diligent with TODO comments
+    "N",        # enforce naming conventions, e.g. ClassName vs function_name
+    "RET",      # Good return practices
+    # "NPY",      # Some numpy-specific things
+]
+
+[tool.isort]
+profile="black"
+line_length = 120
+
+
+[tool.black]
+line-length = 120

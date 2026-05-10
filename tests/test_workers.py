@@ -68,9 +68,7 @@ def _drive_cut_all(worker: PipelineWorker, tracks: list[Track]) -> dict[str, Any
     """Run ``_cut_all`` and capture the emitted ``finished`` payload + log lines."""
     captured: dict[str, Any] = {"finished": None, "logs": []}
 
-    worker.finished.connect(
-        lambda ok, msg: captured.__setitem__("finished", (ok, msg))
-    )
+    worker.finished.connect(lambda ok, msg: captured.__setitem__("finished", (ok, msg)))
     worker.logLine.connect(lambda line: captured["logs"].append(line))
 
     # ``bins`` is opaque to the stubs; any sentinel works.
@@ -109,7 +107,7 @@ def test_cut_all_sanitises_album_name_for_subfolder(
     tmp_path: Path,
 ) -> None:
     # Windows-illegal characters + trailing dots/spaces.
-    job = _make_job(tmp_path, album='Live: Greatest Hits? <Vol. 1>  . ')
+    job = _make_job(tmp_path, album="Live: Greatest Hits? <Vol. 1>  . ")
     worker = PipelineWorker(job)
 
     _drive_cut_all(worker, _tracks())

@@ -20,7 +20,6 @@ import re
 from dataclasses import dataclass
 from itertools import pairwise
 
-
 # Optional "1." / "01)" / "1 -" prefix, then timestamp, then title.
 _LINE_RE = re.compile(
     r"""
@@ -41,8 +40,8 @@ _LINE_RE = re.compile(
 class Track:
     """A parsed tracklist entry."""
 
-    index: int          # 1-based position
-    start: float        # seconds
+    index: int  # 1-based position
+    start: float  # seconds
     title: str
 
 
@@ -104,8 +103,7 @@ def find_tracklist_in_text(text: str) -> list[Track]:
         return []
 
     return [
-        Track(index=j + 1, start=start, title=title)
-        for j, (start, title) in enumerate(candidates[best_lo:best_hi])
+        Track(index=j + 1, start=start, title=title) for j, (start, title) in enumerate(candidates[best_lo:best_hi])
     ]
 
 
@@ -146,10 +144,7 @@ def parse_tracklist(text: str) -> list[Track]:
             continue
         m = _LINE_RE.match(line)
         if not m:
-            raise TracklistError(
-                f"Line {lineno}: could not parse {raw!r}. "
-                f"Expected something like '0:00 Title'."
-            )
+            raise TracklistError(f"Line {lineno}: could not parse {raw!r}. Expected something like '0:00 Title'.")
         start = _parse_timestamp(m.group("ts"))
         title = _clean_title(m.group("title"))
         if not title:

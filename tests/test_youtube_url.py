@@ -10,7 +10,6 @@ import pytest
 
 from slicer.core.youtube_url import is_shorts_url, youtube_video_id
 
-
 _VID = "zcYVH4fYCkg"
 
 
@@ -36,7 +35,7 @@ _VID = "zcYVH4fYCkg"
         f"https://youtu.be/{_VID}?t=20",
         f"https://youtu.be/{_VID}?si=abc",
         f"  https://www.youtube.com/watch?v={_VID}  ",  # surrounding whitespace
-        f"HTTPS://WWW.YOUTUBE.COM/watch?v={_VID}",      # case-insensitive scheme/host
+        f"HTTPS://WWW.YOUTUBE.COM/watch?v={_VID}",  # case-insensitive scheme/host
     ],
 )
 def test_youtube_video_id_extracts_id_from_supported_urls(url: str) -> None:
@@ -75,17 +74,17 @@ def test_shorts_urls_are_flagged_and_rejected(url: str) -> None:
         "",
         "   ",
         "not a url",
-        "ftp://www.youtube.com/watch?v=" + _VID,        # wrong scheme
-        "https://www.youtube.com/",                      # bare host
-        "https://www.youtube.com/playlist?list=PLabc",   # playlist page
-        "https://www.youtube.com/@SomeChannel",          # @-handle channel
-        "https://www.youtube.com/c/SomeChannel",         # /c/ channel
-        "https://www.youtube.com/channel/UCabc",         # /channel/ channel
-        "https://example.com/watch?v=" + _VID,           # not a YouTube host
-        "https://www.youtube.com/watch?v=tooshort",      # < 11 char id
+        "ftp://www.youtube.com/watch?v=" + _VID,  # wrong scheme
+        "https://www.youtube.com/",  # bare host
+        "https://www.youtube.com/playlist?list=PLabc",  # playlist page
+        "https://www.youtube.com/@SomeChannel",  # @-handle channel
+        "https://www.youtube.com/c/SomeChannel",  # /c/ channel
+        "https://www.youtube.com/channel/UCabc",  # /channel/ channel
+        "https://example.com/watch?v=" + _VID,  # not a YouTube host
+        "https://www.youtube.com/watch?v=tooshort",  # < 11 char id
         "https://www.youtube.com/watch?v=" + _VID + "EXTRA",  # > 11 char id
-        "https://www.youtube.com/watch",                 # missing v= entirely
-        "https://www.youtube.com/watch?foo=bar",         # no v= param
+        "https://www.youtube.com/watch",  # missing v= entirely
+        "https://www.youtube.com/watch?foo=bar",  # no v= param
     ],
 )
 def test_junk_urls_are_rejected(url: str) -> None:

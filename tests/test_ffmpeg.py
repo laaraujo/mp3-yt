@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -28,7 +28,7 @@ def test_find_binaries_falls_through_when_override_dir_empty(tmp_path, monkeypat
     """Empty override dir → fall through to PATH."""
     monkeypatch.setenv("YT2MP3SLICER_FFMPEG_DIR", str(tmp_path))
     bins = find_binaries()
-    assert os.path.basename(bins.ffmpeg).startswith("ffmpeg")
+    assert Path(bins.ffmpeg).name.startswith("ffmpeg")
 
 
 def test_find_binaries_raises_when_path_empty(tmp_path, monkeypatch):

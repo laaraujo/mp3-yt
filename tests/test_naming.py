@@ -6,7 +6,6 @@ import pytest
 
 from slicer.core.naming import safe_filename, track_filename
 
-
 # ---- safe_filename -----------------------------------------------------
 
 
@@ -17,14 +16,14 @@ def test_safe_filename_passes_clean_titles_through() -> None:
 @pytest.mark.parametrize(
     "raw, expected",
     [
-        ('Track <evil> name', "Track _evil_ name"),
-        ('Quote " here',       "Quote _ here"),
-        ("AC/DC",              "AC_DC"),
-        ("path\\with\\back",   "path_with_back"),
-        ("Bar | Pipe",         "Bar _ Pipe"),
-        ("What?",              "What_"),
-        ("Star * Wars",        "Star _ Wars"),
-        ("Colon: title",       "Colon_ title"),
+        ("Track <evil> name", "Track _evil_ name"),
+        ('Quote " here', "Quote _ here"),
+        ("AC/DC", "AC_DC"),
+        ("path\\with\\back", "path_with_back"),
+        ("Bar | Pipe", "Bar _ Pipe"),
+        ("What?", "What_"),
+        ("Star * Wars", "Star _ Wars"),
+        ("Colon: title", "Colon_ title"),
     ],
 )
 def test_safe_filename_replaces_illegal_chars(raw: str, expected: str) -> None:
@@ -84,12 +83,12 @@ def test_safe_filename_truncation_strips_trailing_garbage() -> None:
 
 
 def test_track_filename_pads_to_total_width() -> None:
-    assert track_filename(1, 11, "First")  == "01 - First.mp3"
+    assert track_filename(1, 11, "First") == "01 - First.mp3"
     assert track_filename(11, 11, "Last") == "11 - Last.mp3"
 
 
 def test_track_filename_widens_for_three_digit_totals() -> None:
-    assert track_filename(1, 100, "First")   == "001 - First.mp3"
+    assert track_filename(1, 100, "First") == "001 - First.mp3"
     assert track_filename(100, 100, "Last") == "100 - Last.mp3"
 
 

@@ -89,26 +89,22 @@ def probe_duration(path: Path, *, bins: FfmpegBinaries | None = None) -> float:
     bins = bins or find_binaries()
     cmd = [
         bins.ffprobe,
-        "-v", "error",
-        "-print_format", "json",
+        "-v",
+        "error",
+        "-print_format",
+        "json",
         "-show_format",
         str(path),
     ]
     try:
-        out = subprocess.run(
-            cmd, check=True, capture_output=True, text=True
-        )
+        out = subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as exc:
-        raise FfmpegError(
-            f"ffprobe failed for {path}: {exc.stderr.strip() or exc}"
-        ) from exc
+        raise FfmpegError(f"ffprobe failed for {path}: {exc.stderr.strip() or exc}") from exc
     try:
         data = json.loads(out.stdout)
         return float(data["format"]["duration"])
     except (KeyError, ValueError, json.JSONDecodeError) as exc:
-        raise FfmpegError(
-            f"Could not read duration from ffprobe output for {path}."
-        ) from exc
+        raise FfmpegError(f"Could not read duration from ffprobe output for {path}.") from exc
 
 
 def cut_segment(
@@ -136,26 +132,30 @@ def cut_segment(
     cmd: list[str] = [
         bins.ffmpeg,
         "-hide_banner",
-        "-loglevel", "error",
+        "-loglevel",
+        "error",
         "-y",
-        "-ss", f"{start:.3f}",
+        "-ss",
+        f"{start:.3f}",
     ]
     if end is not None:
         cmd += ["-to", f"{end:.3f}"]
     cmd += [
-        "-i", str(src),
-        "-map", "0:a:0",
-        "-c", "copy",
+        "-i",
+        str(src),
+        "-map",
+        "0:a:0",
+        "-c",
+        "copy",
         # Strip inherited tags; we write fresh ones with mutagen later.
-        "-map_metadata", "-1",
-        "-write_xing", "1",
+        "-map_metadata",
+        "-1",
+        "-write_xing",
+        "1",
         str(dest),
     ]
 
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as exc:
-        raise FfmpegError(
-            f"ffmpeg failed cutting {src.name} -> {dest.name}: "
-            f"{exc.stderr.strip() or exc}"
-        ) from exc
+        raise FfmpegError(f"ffmpeg failed cutting {src.name} -> {dest.name}: {exc.stderr.strip() or exc}") from exc

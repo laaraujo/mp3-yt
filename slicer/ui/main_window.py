@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from PySide6.QtCore import Qt, QSettings, QThread, Signal
+from PySide6.QtCore import QSettings, Qt, QThread, Signal
 from PySide6.QtGui import QColor, QIcon, QTextOption
 from PySide6.QtWidgets import (
     QApplication,
@@ -35,10 +35,10 @@ from slicer.workers import CutJob, MetadataWorker, PipelineWorker
 
 MessageKind = Literal["info", "success", "warning", "error"]
 _MESSAGE_COLORS: dict[str, QColor] = {
-    "info":    QColor("#c5c9da"),
+    "info": QColor("#c5c9da"),
     "success": QColor("#4ade80"),
     "warning": QColor("#facc15"),
-    "error":   QColor("#f87171"),
+    "error": QColor("#f87171"),
 }
 
 _SETTINGS_OUTPUT_DIR = "output/last_dir"
@@ -89,8 +89,7 @@ class MainWindow(QMainWindow):
         header.setSpacing(2)
         title = QLabel("YouTube → MP3 Slicer")
         subtitle = QLabel(
-            "Split a YouTube video into individually-tagged MP3 tracks "
-            "from a pasted tracklist.",
+            "Split a YouTube video into individually-tagged MP3 tracks from a pasted tracklist.",
         )
         subtitle.setWordWrap(True)
         header.addWidget(title)
@@ -112,21 +111,14 @@ class MainWindow(QMainWindow):
         tl_layout = QVBoxLayout(tl_box)
         self.tracklist_edit = QPlainTextEdit()
         self.tracklist_edit.setWordWrapMode(QTextOption.WrapMode.NoWrap)
-        self.tracklist_edit.setPlaceholderText(
-            "0:00 Intro\n"
-            "3:01 Sunrise\n"
-            "5:32 Departure\n"
-            "..."
-        )
+        self.tracklist_edit.setPlaceholderText("0:00 Intro\n3:01 Sunrise\n5:32 Departure\n...")
         self.tracklist_edit.setMinimumHeight(180)
         tl_layout.addWidget(self.tracklist_edit)
         root.addWidget(tl_box, stretch=1)
 
         out_box = QGroupBox("Output folder")
         out_layout = QHBoxLayout(out_box)
-        self.output_edit = QLineEdit(
-            placeholderText="Where the individual track MP3s will be written"
-        )
+        self.output_edit = QLineEdit(placeholderText="Where the individual track MP3s will be written")
         # Persist on tab/click-away; covers paths typed without using Browse.
         self.output_edit.editingFinished.connect(self._persist_output_dir)
         self.browse_out_button = QPushButton("Browse…")
@@ -158,9 +150,7 @@ class MainWindow(QMainWindow):
         msg_layout = QVBoxLayout(msg_box)
         self.messages = QListWidget()
         self.messages.setMinimumHeight(160)
-        self.messages.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
+        self.messages.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         # Backwards-compat alias for older handlers.
         self.results = self.messages
         msg_layout.addWidget(self.messages)
@@ -173,15 +163,12 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(box)
 
         url_row = QHBoxLayout()
-        self.yt_url_edit = QLineEdit(
-            placeholderText="https://www.youtube.com/watch?v=..."
-        )
+        self.yt_url_edit = QLineEdit(placeholderText="https://www.youtube.com/watch?v=...")
         # Re-validate per keystroke so the rest of the form follows along.
         self.yt_url_edit.textChanged.connect(self._on_url_changed)
         self.yt_fetch_button = QPushButton("Fetch info")
         self.yt_fetch_button.setToolTip(
-            "Read the video's chapters / description and auto-fill the album, "
-            "artist and tracklist below."
+            "Read the video's chapters / description and auto-fill the album, artist and tracklist below."
         )
         self.yt_fetch_button.clicked.connect(self._on_fetch_clicked)
         url_row.addWidget(self.yt_url_edit, stretch=1)
@@ -219,9 +206,7 @@ class MainWindow(QMainWindow):
 
     def _pick_output_dir(self) -> None:
         start_dir = self.output_edit.text() or str(Path.home())
-        path = QFileDialog.getExistingDirectory(
-            self, "Choose output folder", start_dir
-        )
+        path = QFileDialog.getExistingDirectory(self, "Choose output folder", start_dir)
         if path:
             self.output_edit.setText(path)
             # Picking is an explicit choice — save now, don't wait for editingFinished.
@@ -312,9 +297,7 @@ class MainWindow(QMainWindow):
 
     def _on_cancel_clicked(self) -> None:
         if self._worker is not None:
-            self._append_message(
-                "Cancelling after current track…", kind="warning"
-            )
+            self._append_message("Cancelling after current track…", kind="warning")
             self.cancel_button.setEnabled(False)
             self.requestCancel.emit()
 
@@ -383,8 +366,7 @@ class MainWindow(QMainWindow):
             )
         else:
             self._append_message(
-                "No tracklist detected in chapters, description or top "
-                "comments — paste one manually.",
+                "No tracklist detected in chapters, description or top comments — paste one manually.",
                 kind="warning",
             )
             QMessageBox.information(
@@ -469,9 +451,7 @@ class MainWindow(QMainWindow):
             self._last_progress_msg = msg
             self._append_message(msg)
 
-    def _on_track_finished(
-        self, idx: int, total: int, title: str, ok: bool, msg: str
-    ) -> None:
+    def _on_track_finished(self, idx: int, total: int, title: str, ok: bool, msg: str) -> None:
         marker = "OK  " if ok else "FAIL"
         text = f"[{idx:02d}/{total:02d}] {marker}  {title}"
         self._append_message(
@@ -516,15 +496,12 @@ class MainWindow(QMainWindow):
             self._url_is_valid = False
         elif is_shorts_url(text):
             self._url_is_valid = False
-            self.url_error_label.setText(
-                "YouTube Shorts aren't supported — paste a regular video URL."
-            )
+            self.url_error_label.setText("YouTube Shorts aren't supported — paste a regular video URL.")
             self.url_error_label.show()
         elif youtube_video_id(text) is None:
             self._url_is_valid = False
             self.url_error_label.setText(
-                "That doesn't look like a YouTube video URL "
-                "(expected youtube.com/watch?v=… or youtu.be/…)."
+                "That doesn't look like a YouTube video URL (expected youtube.com/watch?v=… or youtu.be/…)."
             )
             self.url_error_label.show()
         else:
@@ -547,9 +524,7 @@ class MainWindow(QMainWindow):
         self.yt_url_edit.setEnabled(not busy)
 
         self.yt_fetch_button.setEnabled(self._url_is_valid and not busy)
-        self.yt_fetch_button.setText(
-            "Fetching…" if fetching else "Fetch info"
-        )
+        self.yt_fetch_button.setText("Fetching…" if fetching else "Fetch info")
 
         for w in (
             self.album_edit,

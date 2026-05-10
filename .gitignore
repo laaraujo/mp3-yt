@@ -37,3 +37,6 @@ build/ffmpeg-bin/
 build/ffmpeg.zip
 build/ffmpeg.tar.xz
 build/ffmpeg-extracted/
+
+# Version control
+.pre-commit-cache/

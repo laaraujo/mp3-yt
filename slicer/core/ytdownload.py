@@ -13,7 +13,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-
 # Player clients yt-dlp should try when talking to YouTube. The default
 # anonymous clients are increasingly hit by the "Sign in to confirm you're
 # not a bot" challenge; ``android`` slips past it in most cases and returns
@@ -41,9 +40,9 @@ def _apply_anti_bot(opts: dict) -> None:
 
 @dataclass(frozen=True)
 class DownloadResult:
-    path: Path           # absolute path to the produced .mp3
+    path: Path  # absolute path to the produced .mp3
     title: str
-    duration: float      # seconds
+    duration: float  # seconds
 
 
 @dataclass(frozen=True)
@@ -313,9 +312,7 @@ def download_as_mp3(
         # Fallback: use the most recently produced mp3 in out_dir.
         candidates = sorted(out_dir.glob("*.mp3"), key=lambda p: p.stat().st_mtime)
         if not candidates:
-            raise RuntimeError(
-                f"yt-dlp did not produce an mp3 in {out_dir}. URL: {url}"
-            )
+            raise RuntimeError(f"yt-dlp did not produce an mp3 in {out_dir}. URL: {url}")
         produced = candidates[-1]
 
     if on_progress:

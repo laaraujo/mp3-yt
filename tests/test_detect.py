@@ -3,11 +3,7 @@
 from __future__ import annotations
 
 import slicer.core.detect as detect
-from slicer.core.detect import (
-    chapters_to_tracks,
-    detect_tracklist,
-    guess_artist_and_album,
-)
+from slicer.core.detect import chapters_to_tracks, detect_tracklist, guess_artist_and_album
 from slicer.core.ytdownload import Chapter, Comment, VideoMetadata
 
 
@@ -66,9 +62,7 @@ def test_guess_artist_and_album_dash_form() -> None:
 
 
 def test_guess_artist_and_album_strips_trailing_brackets() -> None:
-    artist, album = guess_artist_and_album(
-        "Anna Rivers - Echoes of Tomorrow [Full Album] (Remastered)"
-    )
+    artist, album = guess_artist_and_album("Anna Rivers - Echoes of Tomorrow [Full Album] (Remastered)")
     assert artist == "Anna Rivers"
     assert album == "Echoes of Tomorrow"
 
@@ -88,7 +82,7 @@ def test_guess_artist_and_album_returns_none_when_no_dash() -> None:
 
 def test_detect_tracklist_uses_chapters_when_present(monkeypatch) -> None:
     chapters = [
-        Chapter(start_time=0.0,   end_time=181.0, title="Intro"),
+        Chapter(start_time=0.0, end_time=181.0, title="Intro"),
         Chapter(start_time=181.0, end_time=332.0, title="Sunrise"),
     ]
     _patch_fetchers(
@@ -107,13 +101,7 @@ def test_detect_tracklist_uses_chapters_when_present(monkeypatch) -> None:
 
 
 def test_detect_tracklist_falls_back_to_description(monkeypatch) -> None:
-    description = (
-        "Subscribe!\n"
-        "0:00 Intro\n"
-        "2:34 Pulse Train\n"
-        "7:12 Crystal Drift\n"
-        "Follow me!\n"
-    )
+    description = "Subscribe!\n0:00 Intro\n2:34 Pulse Train\n7:12 Crystal Drift\nFollow me!\n"
     _patch_fetchers(
         monkeypatch,
         metadata=_make_metadata(description=description),
@@ -195,12 +183,10 @@ def test_detect_status_emits_only_for_attempted_sources_chapters(
     """When chapters hit, no description/comments status is emitted."""
     msgs: list[str] = []
     chapters = [
-        Chapter(start_time=0.0,   end_time=100.0, title="A"),
+        Chapter(start_time=0.0, end_time=100.0, title="A"),
         Chapter(start_time=100.0, end_time=200.0, title="B"),
     ]
-    _patch_fetchers(
-        monkeypatch, metadata=_make_metadata(chapters=chapters), comments=[]
-    )
+    _patch_fetchers(monkeypatch, metadata=_make_metadata(chapters=chapters), comments=[])
 
     detect_tracklist("http://fake", on_status=msgs.append)
 

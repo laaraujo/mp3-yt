@@ -20,9 +20,7 @@ def test_apply_anti_bot_sets_player_client_when_missing() -> None:
 
 def test_apply_anti_bot_preserves_caller_supplied_player_client() -> None:
     """A caller-pinned player_client must not be clobbered."""
-    opts: dict = {
-        "extractor_args": {"youtube": {"player_client": ["android_creator"]}}
-    }
+    opts: dict = {"extractor_args": {"youtube": {"player_client": ["android_creator"]}}}
     _apply_anti_bot(opts)
     assert opts["extractor_args"]["youtube"]["player_client"] == ["android_creator"]
 
@@ -59,14 +57,14 @@ def test_apply_anti_bot_does_not_mutate_input_extractor_args_in_place() -> None:
 
 
 def test_human_bytes_steps_through_units() -> None:
-    assert _human_bytes(0)            == "0.0 B"
-    assert _human_bytes(512)          == "512.0 B"
-    assert _human_bytes(1024)         == "1.0 KB"
-    assert _human_bytes(1500)         == "1.5 KB"
-    assert _human_bytes(1024 * 1024)  == "1.0 MB"
-    assert _human_bytes(1024 ** 3)    == "1.0 GB"
-    assert _human_bytes(1024 ** 4)    == "1.0 TB"
-    assert _human_bytes(1024 ** 5)    == "1024.0 TB"  # never overflows the unit list
+    assert _human_bytes(0) == "0.0 B"
+    assert _human_bytes(512) == "512.0 B"
+    assert _human_bytes(1024) == "1.0 KB"
+    assert _human_bytes(1500) == "1.5 KB"
+    assert _human_bytes(1024 * 1024) == "1.0 MB"
+    assert _human_bytes(1024**3) == "1.0 GB"
+    assert _human_bytes(1024**4) == "1.0 TB"
+    assert _human_bytes(1024**5) == "1024.0 TB"  # never overflows the unit list
 
 
 def test_human_bytes_clamps_negative() -> None:
@@ -75,9 +73,9 @@ def test_human_bytes_clamps_negative() -> None:
 
 
 def test_format_eta_short_durations() -> None:
-    assert _format_eta(0)   == "0:00"
-    assert _format_eta(7)   == "0:07"
-    assert _format_eta(75)  == "1:15"
+    assert _format_eta(0) == "0:00"
+    assert _format_eta(7) == "0:07"
+    assert _format_eta(75) == "1:15"
     assert _format_eta(599) == "9:59"
 
 
@@ -88,17 +86,17 @@ def test_format_eta_uses_h_mm_ss_above_one_hour() -> None:
 
 
 def test_format_eta_handles_floats_and_negatives() -> None:
-    assert _format_eta(7.9) == "0:07"   # truncates
-    assert _format_eta(-5)  == "0:00"
+    assert _format_eta(7.9) == "0:07"  # truncates
+    assert _format_eta(-5) == "0:00"
 
 
 def test_format_download_progress_full_dict() -> None:
     out = _format_download_progress(
         {
             "downloaded_bytes": 12_500_000,
-            "total_bytes":      27_500_000,
-            "speed":            1_800_000,
-            "eta":              8,
+            "total_bytes": 27_500_000,
+            "speed": 1_800_000,
+            "eta": 8,
         }
     )
     assert " 45.5%" in out
@@ -110,10 +108,10 @@ def test_format_download_progress_full_dict() -> None:
 def test_format_download_progress_uses_estimate_when_total_missing() -> None:
     out = _format_download_progress(
         {
-            "downloaded_bytes":      5_000_000,
+            "downloaded_bytes": 5_000_000,
             "total_bytes_estimate": 10_000_000,
-            "speed":                 500_000,
-            "eta":                   10,
+            "speed": 500_000,
+            "eta": 10,
         }
     )
     assert " 50.0%" in out

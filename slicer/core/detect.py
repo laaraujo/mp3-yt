@@ -12,12 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from slicer.core.tracklist import Track, find_tracklist_in_text
-from slicer.core.ytdownload import (
-    Chapter,
-    VideoMetadata,
-    fetch_metadata,
-    fetch_top_comments,
-)
+from slicer.core.ytdownload import Chapter, VideoMetadata, fetch_metadata, fetch_top_comments
 
 StatusCallback = Callable[[str], None]
 """Receives short progress strings during detection."""
@@ -70,6 +65,7 @@ def detect_tracklist(
     ``on_status`` receives a short user-facing string before each detection
     step so the GUI can show progress during the slow comments fetch.
     """
+
     def _say(msg: str) -> None:
         if on_status is not None:
             on_status(msg)
@@ -93,10 +89,7 @@ def detect_tracklist(
     _say("Trying to get tracklist from description…")
     desc_tracks = find_tracklist_in_text(metadata.description)
     if desc_tracks:
-        _say(
-            f"Found tracklist in video description "
-            f"({len(desc_tracks)} tracks)."
-        )
+        _say(f"Found tracklist in video description ({len(desc_tracks)} tracks).")
         return DetectionResult(
             source="description",
             tracks=desc_tracks,
@@ -110,10 +103,7 @@ def detect_tracklist(
         comment_tracks = find_tracklist_in_text(comment.text)
         if comment_tracks:
             who = comment.author or "an unknown user"
-            _say(
-                f"Found tracklist in top comment by {who} "
-                f"({len(comment_tracks)} tracks)."
-            )
+            _say(f"Found tracklist in top comment by {who} ({len(comment_tracks)} tracks).")
             return DetectionResult(
                 source="comments",
                 tracks=comment_tracks,

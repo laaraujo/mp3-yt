@@ -59,13 +59,11 @@ Setup is managed by [**uv**](https://docs.astral.sh/uv/). You also need
 ship their own copy.
 
 ```bash
-# Install uv (skip if you have it).
-curl -LsSf https://astral.sh/uv/install.sh | sh        # Linux / macOS / WSL
-# powershell -c "irm https://astral.sh/uv/install.ps1 | iex"   # Windows
-
 git clone <repo> yt2mp3slicer
 cd yt2mp3slicer
-uv sync           # creates .venv from uv.lock
+uv sync
+pre-commit install
+
 ```
 
 Day-to-day:

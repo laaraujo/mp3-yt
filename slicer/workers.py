@@ -128,9 +128,7 @@ class PipelineWorker(QObject):
                 ffmpeg_location=str(Path(bins.ffmpeg).parent),
             )
             source_mp3 = result.path
-            self.logLine.emit(
-                f"Downloaded: {result.title} ({result.duration:.0f}s)"
-            )
+            self.logLine.emit(f"Downloaded: {result.title} ({result.duration:.0f}s)")
 
             self._cut_all(tracks, source_mp3, bins)
 
@@ -172,9 +170,7 @@ class PipelineWorker(QObject):
         # titles. If somehow blank (the GUI requires it), write straight
         # into the chosen folder.
         album_subdir = safe_filename(job.album.strip()) if job.album.strip() else None
-        album_folder = (
-            job.output_dir / album_subdir if album_subdir else job.output_dir
-        )
+        album_folder = job.output_dir / album_subdir if album_subdir else job.output_dir
         album_folder.mkdir(parents=True, exist_ok=True)
         self.logLine.emit(f"Writing tracks to {album_folder}")
 

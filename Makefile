@@ -11,6 +11,7 @@
 #   make build-macos    Build a self-contained macOS .app    (must run on macOS)
 #   make build-windows  Build a self-contained Windows .exe  (must run on Windows)
 #   make clean          Remove build artifacts and the local .venv
+#   make linter         Run the linter (pre-commit run --all-files)
 #
 
 # --- Host OS detection ----------------------------------------------------
@@ -31,7 +32,7 @@ endif
 # --- Targets --------------------------------------------------------------
 
 .DEFAULT_GOAL := help
-.PHONY: help sync test run build build-linux build-macos build-windows clean
+.PHONY: help sync test run build build-linux build-macos build-windows clean linter
 
 help:
 	@echo "yt2mp3slicer (host detected: $(HOST_OS))"
@@ -45,6 +46,7 @@ help:
 	@echo "  make build-macos    Build a macOS .app     (must run on macOS)"
 	@echo "  make build-windows  Build a Windows .exe   (must run on Windows)"
 	@echo "  make clean          Remove dist/, build/build/, and .venv"
+	@echo "  make linter         Run pre-commit on all files"
 
 sync:
 	uv sync
@@ -69,3 +71,6 @@ build-windows:
 
 clean:
 	rm -rf dist build/build build/ffmpeg-bin build/ffmpeg-extracted .venv
+
+linter:
+	uv run pre-commit run --all-files

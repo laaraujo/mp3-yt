@@ -128,9 +128,7 @@ def test_format_tracks_round_trips_through_parse() -> None:
     parsed = parse_tracklist(text)
     formatted = format_tracks(parsed)
     re_parsed = parse_tracklist(formatted)
-    assert [(t.start, t.title) for t in re_parsed] == [
-        (t.start, t.title) for t in parsed
-    ]
+    assert [(t.start, t.title) for t in re_parsed] == [(t.start, t.title) for t in parsed]
 
 
 # ---- lenient text scanner (for YouTube descriptions) ---------------------
