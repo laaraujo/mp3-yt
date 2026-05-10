@@ -1,7 +1,10 @@
 """Download a YouTube (or any yt-dlp-supported) URL as a single MP3 file.
 
-Audio is extracted with ffmpeg, so ffmpeg must be on PATH (it is also a hard
-requirement of the cutter).
+Audio is extracted with ffmpeg. yt-dlp's ``FFmpegExtractAudio`` postprocessor
+locates ffmpeg/ffprobe via ``shutil.which`` by default, which doesn't work
+when we're running from a frozen macOS ``.app`` bundle (its ``PATH`` doesn't
+include the bundled ``bin/`` folder). Callers should pass ``ffmpeg_location``
+pointing at the directory containing both binaries.
 """
 
 from __future__ import annotations
@@ -91,11 +94,18 @@ def download_as_mp3(
     *,
     on_progress: ProgressCallback | None = None,
     quality_kbps: int = 192,
+    ffmpeg_location: str | Path | None = None,
 ) -> DownloadResult:
     """Download ``url`` into ``out_dir`` as an MP3 file and return the result.
 
     ``on_progress`` is called from yt-dlp's worker thread with download
     progress; do not touch Qt widgets directly from inside it.
+
+    ``ffmpeg_location`` is forwarded to yt-dlp so its ``FFmpegExtractAudio``
+    postprocessor can find ffmpeg/ffprobe in our bundled location instead of
+    relying on ``PATH``. May be a directory containing both binaries or the
+    path to ``ffmpeg`` itself; yt-dlp accepts either. When ``None``, yt-dlp
+    falls back to ``shutil.which``.
     """
     # Imported lazily so the GUI starts even if yt_dlp has an import-time issue.
     from yt_dlp import YoutubeDL
@@ -134,6 +144,8 @@ def download_as_mp3(
         "writethumbnail": False,
         "embedthumbnail": False,
     }
+    if ffmpeg_location is not None:
+        ydl_opts["ffmpeg_location"] = str(ffmpeg_location)
 
     with YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)

@@ -116,8 +116,14 @@ class PipelineWorker(QObject):
                 # Map yt-dlp progress to the first ~15% of the overall bar.
                 self.progressChanged.emit(min(frac * 0.15, 0.15), msg)
 
+            # Point yt-dlp's FFmpegExtractAudio postprocessor at the same
+            # binaries the cutter uses; otherwise it falls back to PATH and
+            # fails inside frozen .app/.exe bundles where PATH is minimal.
             result = download_as_mp3(
-                job.youtube_url, tmp_dir, on_progress=_ydl_progress
+                job.youtube_url,
+                tmp_dir,
+                on_progress=_ydl_progress,
+                ffmpeg_location=str(Path(bins.ffmpeg).parent),
             )
             source_mp3 = result.path
             self.logLine.emit(
