@@ -152,11 +152,6 @@ QListWidget::item:selected {
     color: white;
 }
 
-QStatusBar {
-    background: #14172a;
-    color: #9aa0b3;
-}
-
 QToolTip {
     background-color: #14172a;
     color: #e6e6e6;

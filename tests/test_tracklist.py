@@ -19,25 +19,25 @@ def _seconds(tracks):
 
 def test_basic_example_from_user() -> None:
     text = """\
-0:00 Emerald Hill Zone
-3:01 Spring Yard Zone
-5:32 Green Hill Zone
-8:24 Chemical Plant Zone
-11:53 Star Light Zone
-14:19 Aquatic Ruin Zone
-16:53 Marble Zone
-19:29 Casino Night Zone
-22:38 Metropolis Zone
-24:33 Sky Chase Zone
-26:30 Final Zone
+0:00 Intro
+3:01 Sunrise
+5:32 Departure
+8:24 Crossroads
+11:53 Reflection
+14:19 Storm
+16:53 Calm
+19:29 Awakening
+22:38 Echoes
+24:33 Horizon
+26:30 Outro
 """
     tracks = parse_tracklist(text)
     assert len(tracks) == 11
     assert tracks[0].start == 0
-    assert tracks[0].title == "Emerald Hill Zone"
+    assert tracks[0].title == "Intro"
     assert tracks[1].start == 3 * 60 + 1
     assert tracks[-1].start == 26 * 60 + 30
-    assert tracks[-1].title == "Final Zone"
+    assert tracks[-1].title == "Outro"
     assert [t.index for t in tracks] == list(range(1, 12))
 
 
@@ -141,17 +141,17 @@ def test_find_tracklist_in_text_handles_youtube_description() -> None:
 Subscribe for more!
 
 Tracklist:
-0:00 Emerald Hill Zone
-3:01 Spring Yard Zone
-5:32 Green Hill Zone
+0:00 Intro
+3:01 Sunrise
+5:32 Departure
 
 Follow me on Twitter: @example
-#sonic #ost
+#playlist #liveset
 """
     tracks = find_tracklist_in_text(desc)
     assert len(tracks) == 3
     assert tracks[0].start == 0
-    assert tracks[0].title == "Emerald Hill Zone"
+    assert tracks[0].title == "Intro"
     assert tracks[2].start == 5 * 60 + 32
 
 

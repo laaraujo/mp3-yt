@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from importlib import resources
 from pathlib import Path
+from typing import Literal
 
-from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QIcon, QTextOption
+from PySide6.QtCore import Qt, QSettings, QThread, Signal
+from PySide6.QtGui import QColor, QIcon, QTextOption
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -23,14 +25,28 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSizePolicy,
-    QStatusBar,
     QVBoxLayout,
     QWidget,
 )
 
 from slicer import __version__
 from slicer.core.tracklist import format_tracks
+from slicer.core.youtube_url import is_shorts_url, youtube_video_id
 from slicer.workers import CutJob, MetadataWorker, PipelineWorker
+
+# Severity → foreground color for the Messages list. Tuned to read against
+# the dark panel background defined in styles.qss.
+MessageKind = Literal["info", "success", "warning", "error"]
+_MESSAGE_COLORS: dict[str, QColor] = {
+    "info":    QColor("#c5c9da"),
+    "success": QColor("#4ade80"),
+    "warning": QColor("#facc15"),
+    "error":   QColor("#f87171"),
+}
+
+# QSettings key for the last-used output folder. Kept in a module-level
+# constant so we can't typo it in two different places.
+_SETTINGS_OUTPUT_DIR = "output/last_dir"
 
 
 class MainWindow(QMainWindow):
@@ -48,8 +64,30 @@ class MainWindow(QMainWindow):
         self._worker: PipelineWorker | None = None
         self._meta_thread: QThread | None = None
         self._meta_worker: MetadataWorker | None = None
+        # Used to dedupe the "Downloading audio…" / "Cutting N/M…" phase
+        # strings that yt-dlp's progress hook emits on every byte tick.
+        self._last_progress_msg: str | None = None
+        # The QListWidgetItem currently being updated in place by the live
+        # download-progress line. ``None`` means "no live line right now —
+        # the next live tick should append a fresh item". Cleared by every
+        # non-live ``_append_message`` so the live line never overwrites
+        # phase headers, log entries or per-track outcomes.
+        self._live_message_item: QListWidgetItem | None = None
+        # Video titles we've seen from a successful "Fetch info from URL",
+        # keyed by the URL string. Used to decorate the "Starting cut job
+        # for …" message so the user has a friendly identifier instead of a
+        # raw URL. Falls back to the URL when we haven't fetched.
+        self._titles_by_url: dict[str, str] = {}
+        # Tracks whether the URL field currently holds a valid YouTube video
+        # URL. Updated from ``_on_url_changed`` and consumed by
+        # ``_refresh_form_state`` to gate the rest of the form.
+        self._url_is_valid: bool = False
 
         self._build_ui()
+        self._restore_output_dir()
+        # Apply the initial enabled/disabled state now that all widgets exist
+        # (no URL → everything but the URL field starts disabled).
+        self._refresh_form_state()
 
     # ---- UI construction -------------------------------------------------
 
@@ -62,7 +100,7 @@ class MainWindow(QMainWindow):
         # Header
         header = QVBoxLayout()
         header.setSpacing(2)
-        title = QLabel("YT → MP3 Slicer", objectName="titleLabel")
+        title = QLabel("YouTube → MP3 Slicer", objectName="titleLabel")
         subtitle = QLabel(
             "Split a YouTube video into individually-tagged MP3 tracks "
             "from a pasted tracklist.",
@@ -79,9 +117,9 @@ class MainWindow(QMainWindow):
         meta_box = QGroupBox("Album info")
         meta_layout = QFormLayout(meta_box)
         meta_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.album_edit = QLineEdit(placeholderText="e.g. Sonic the Hedgehog 2 OST")
-        self.artist_edit = QLineEdit(placeholderText="e.g. Masato Nakamura")
-        meta_layout.addRow(self._field_label("Album / disk:"), self.album_edit)
+        self.album_edit = QLineEdit(placeholderText="e.g. Echoes of Tomorrow")
+        self.artist_edit = QLineEdit(placeholderText="e.g. Anna Rivers")
+        meta_layout.addRow(self._field_label("Album:"), self.album_edit)
         meta_layout.addRow(self._field_label("Artist:"), self.artist_edit)
         root.addWidget(meta_box)
 
@@ -91,9 +129,9 @@ class MainWindow(QMainWindow):
         self.tracklist_edit = QPlainTextEdit()
         self.tracklist_edit.setWordWrapMode(QTextOption.WrapMode.NoWrap)
         self.tracklist_edit.setPlaceholderText(
-            "0:00 Emerald Hill Zone\n"
-            "3:01 Spring Yard Zone\n"
-            "5:32 Green Hill Zone\n"
+            "0:00 Intro\n"
+            "3:01 Sunrise\n"
+            "5:32 Departure\n"
             "..."
         )
         self.tracklist_edit.setMinimumHeight(180)
@@ -106,15 +144,18 @@ class MainWindow(QMainWindow):
         self.output_edit = QLineEdit(
             placeholderText="Where the individual track MP3s will be written"
         )
-        browse_out = QPushButton("Browse…")
-        browse_out.clicked.connect(self._pick_output_dir)
+        # Persist whatever the user types once they tab/click away — covers
+        # paths typed in directly without using the Browse button.
+        self.output_edit.editingFinished.connect(self._persist_output_dir)
+        self.browse_out_button = QPushButton("Browse…")
+        self.browse_out_button.clicked.connect(self._pick_output_dir)
         out_layout.addWidget(self.output_edit, stretch=1)
-        out_layout.addWidget(browse_out)
+        out_layout.addWidget(self.browse_out_button)
         root.addWidget(out_box)
 
         # Action row
         actions = QHBoxLayout()
-        self.cut_button = QPushButton("Cut into tracks", objectName="primaryButton")
+        self.cut_button = QPushButton("Cut and download", objectName="primaryButton")
         self.cut_button.clicked.connect(self._on_cut_clicked)
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.setEnabled(False)
@@ -131,15 +172,22 @@ class MainWindow(QMainWindow):
         self.progress.setFormat("%p%")
         root.addWidget(self.progress)
 
-        # Per-track results list
-        self.results = QListWidget()
-        self.results.setMinimumHeight(140)
-        self.results.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        root.addWidget(self.results, stretch=1)
+        # Messages / activity log. Replaces what used to live in the status
+        # bar: download progress phases, per-track outcomes, fetch lifecycle,
+        # cancellation and completion summaries — all in one scrollable list.
+        msg_box = QGroupBox("Messages")
+        msg_layout = QVBoxLayout(msg_box)
+        self.messages = QListWidget()
+        self.messages.setMinimumHeight(160)
+        self.messages.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        # Backwards-compatible alias: older handlers used ``self.results``.
+        self.results = self.messages
+        msg_layout.addWidget(self.messages)
+        root.addWidget(msg_box, stretch=1)
 
         self.setCentralWidget(central)
-        self.setStatusBar(QStatusBar())
-        self.statusBar().showMessage("Ready.")
 
     def _build_source_group(self) -> QGroupBox:
         box = QGroupBox("YouTube URL")
@@ -149,6 +197,9 @@ class MainWindow(QMainWindow):
         self.yt_url_edit = QLineEdit(
             placeholderText="https://www.youtube.com/watch?v=..."
         )
+        # Re-validate on every keystroke so the rest of the form follows
+        # along — fields stay disabled until a recognisable video URL is in.
+        self.yt_url_edit.textChanged.connect(self._on_url_changed)
         self.yt_fetch_button = QPushButton("Fetch info from URL")
         self.yt_fetch_button.setToolTip(
             "Read the video's chapters / description and auto-fill the album, "
@@ -159,11 +210,21 @@ class MainWindow(QMainWindow):
         url_row.addWidget(self.yt_fetch_button)
         layout.addLayout(url_row)
 
+        # Inline validation message for the URL field. Hidden by default;
+        # shown in red when the user has typed something that doesn't parse
+        # as a supported video URL (e.g. a Shorts link or a channel page).
+        self.url_error_label = QLabel("")
+        self.url_error_label.setObjectName("urlErrorLabel")
+        self.url_error_label.setWordWrap(True)
+        self.url_error_label.setStyleSheet("color: #f87171;")
+        self.url_error_label.hide()
+        layout.addWidget(self.url_error_label)
+
         hint = QLabel(
             "Paste a YouTube URL, then click <b>Fetch info from URL</b> to "
-            "auto-detect the tracklist from the video's chapters or description. "
-            "The full audio is only downloaded when you press <b>Cut into "
-            "tracks</b>."
+            "auto-detect the tracklist from the video's chapters, description "
+            "or top comments. The full audio is only downloaded when you "
+            "press <b>Cut and download</b>."
         )
         hint.setWordWrap(True)
         hint.setObjectName("subtitleLabel")
@@ -188,6 +249,28 @@ class MainWindow(QMainWindow):
         )
         if path:
             self.output_edit.setText(path)
+            # Save immediately on picker selection — picking a folder is an
+            # explicit user choice, no reason to wait for ``editingFinished``.
+            self._persist_output_dir()
+
+    # ---- output-folder persistence --------------------------------------
+
+    def _restore_output_dir(self) -> None:
+        """Pre-fill the output field with the last-used folder, if any."""
+        saved = QSettings().value(_SETTINGS_OUTPUT_DIR, "", type=str)
+        if saved:
+            # Restore even if the path no longer exists on disk; the existing
+            # validation in ``_on_cut_clicked`` will tell the user clearly,
+            # and a stale path still serves as a useful "you used this last
+            # time" hint they can edit.
+            self.output_edit.setText(saved)
+
+    def _persist_output_dir(self) -> None:
+        """Save the current output-folder text to QSettings if non-empty."""
+        text = self.output_edit.text().strip()
+        if not text:
+            return
+        QSettings().setValue(_SETTINGS_OUTPUT_DIR, text)
 
     # ---- main action -----------------------------------------------------
 
@@ -205,7 +288,7 @@ class MainWindow(QMainWindow):
             self._error("Please paste a YouTube URL.")
             return
         if not album:
-            self._error("Please enter an album / disk name.")
+            self._error("Please enter an album name.")
             return
         if not artist:
             self._error("Please enter an artist.")
@@ -219,8 +302,20 @@ class MainWindow(QMainWindow):
 
         output_dir = Path(output_dir_str).expanduser()
 
-        self.results.clear()
+        # Persist now in case the user typed the path in directly and clicked
+        # Cut without ever losing focus on the line edit.
+        self._persist_output_dir()
+
+        self.messages.clear()
+        self._last_progress_msg = None
+        self._live_message_item = None
         self.progress.setValue(0)
+        # Prefer the cached video title (from a previous Fetch) for a
+        # human-friendly identifier; fall back to the raw URL otherwise so
+        # the message always says "for <something>".
+        title = self._titles_by_url.get(url)
+        descriptor = f'"{title}"' if title else url
+        self._append_message(f"Starting cut job for {descriptor}…")
 
         job = CutJob(
             youtube_url=url,
@@ -237,17 +332,21 @@ class MainWindow(QMainWindow):
 
         self._thread.started.connect(self._worker.run)
         self._worker.progressChanged.connect(self._on_progress)
+        # Live in-place download progress (%/size/speed/ETA).
+        self._worker.progressDetail.connect(self._update_live_message)
         self._worker.trackFinished.connect(self._on_track_finished)
         self._worker.logLine.connect(self._append_log)
         self._worker.finished.connect(self._on_finished)
         self.requestCancel.connect(self._worker.cancel)
 
-        self._set_running(True)
+        self._refresh_form_state()
         self._thread.start()
 
     def _on_cancel_clicked(self) -> None:
         if self._worker is not None:
-            self.statusBar().showMessage("Cancelling after current track…")
+            self._append_message(
+                "Cancelling after current track…", kind="warning"
+            )
             self.cancel_button.setEnabled(False)
             self.requestCancel.emit()
 
@@ -262,8 +361,9 @@ class MainWindow(QMainWindow):
             self._error("Paste a YouTube URL first.")
             return
 
-        self._set_fetching(True)
-        self.statusBar().showMessage("Fetching video info…")
+        self._last_progress_msg = None
+        self._live_message_item = None
+        self._append_message("Fetching video info…")
 
         self._meta_thread = QThread(self)
         self._meta_worker = MetadataWorker(url)
@@ -271,9 +371,12 @@ class MainWindow(QMainWindow):
         self._meta_thread.started.connect(self._meta_worker.run)
         self._meta_worker.detected.connect(self._on_metadata_detected)
         self._meta_worker.failed.connect(self._on_metadata_failed)
+        # Per-source "Trying to get tracklist from …" updates from detect.py.
+        self._meta_worker.statusChanged.connect(self._append_message)
         self._meta_worker.detected.connect(self._meta_thread.quit)
         self._meta_worker.failed.connect(self._meta_thread.quit)
         self._meta_thread.finished.connect(self._teardown_meta_thread)
+        self._refresh_form_state()
         self._meta_thread.start()
 
     def _on_metadata_detected(self, result) -> None:  # DetectionResult
@@ -283,6 +386,12 @@ class MainWindow(QMainWindow):
             self.album_edit.setText(result.guessed_album or meta.title)
         if not self.artist_edit.text().strip():
             self.artist_edit.setText(result.guessed_artist or meta.uploader)
+
+        # Cache the title so the upcoming "Starting cut job for …" message
+        # has a friendly identifier instead of just the URL.
+        url_at_fetch = self.yt_url_edit.text().strip()
+        if meta.title and url_at_fetch:
+            self._titles_by_url[url_at_fetch] = meta.title
 
         if result.tracks:
             tracklist_text = format_tracks(result.tracks)
@@ -302,26 +411,26 @@ class MainWindow(QMainWindow):
             else:
                 self.tracklist_edit.setPlainText(tracklist_text)
 
-            origin = (
-                "video chapters" if result.source == "chapters"
-                else "video description"
-            )
-            self.statusBar().showMessage(
-                f"Detected {len(result.tracks)} tracks from {origin}."
+            self._append_message(
+                f"Loaded {len(result.tracks)} tracks into the tracklist.",
+                kind="success",
             )
         else:
-            self.statusBar().showMessage(
-                "No tracklist detected in chapters or description — paste one manually."
+            self._append_message(
+                "No tracklist detected in chapters, description or top "
+                "comments — paste one manually.",
+                kind="warning",
             )
             QMessageBox.information(
                 self,
                 "No tracklist found",
-                "This video has no chapters and no recognizable timestamps in "
-                "its description. Paste a tracklist manually below.",
+                "This video has no chapters and no recognizable timestamps "
+                "in its description or top comments. Paste a tracklist "
+                "manually below.",
             )
 
     def _on_metadata_failed(self, msg: str) -> None:
-        self.statusBar().showMessage(msg)
+        self._append_message(msg, kind="error")
         QMessageBox.warning(self, "Fetch failed", msg)
 
     def _teardown_meta_thread(self) -> None:
@@ -330,42 +439,101 @@ class MainWindow(QMainWindow):
             self._meta_thread.deleteLater()
             self._meta_thread = None
         self._meta_worker = None
-        self._set_fetching(False)
+        self._refresh_form_state()
+
+    # ---- messages list ---------------------------------------------------
+
+    def _messages_at_bottom(self) -> bool:
+        """True if the messages list is currently scrolled to the bottom.
+
+        Used to keep auto-scroll polite: if the user has scrolled up to read
+        an earlier message we don't yank them back down on every live tick.
+        Two-pixel slack swallows rounding errors from style-sheet padding.
+        """
+        bar = self.messages.verticalScrollBar()
+        return bar.value() >= bar.maximum() - 2
+
+    def _append_message(
+        self,
+        text: str,
+        *,
+        kind: MessageKind = "info",
+        tooltip: str = "",
+    ) -> None:
+        """Append a timestamped, colour-coded line to the Messages list."""
+        was_at_bottom = self._messages_at_bottom()
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        item = QListWidgetItem(f"[{timestamp}]  {text}")
+        item.setForeground(_MESSAGE_COLORS.get(kind, _MESSAGE_COLORS["info"]))
+        if tooltip:
+            item.setToolTip(tooltip)
+        self.messages.addItem(item)
+        # Any normal append ends the current "live line" run, so the next
+        # in-place update will create a fresh item below this one rather
+        # than overwriting a phase header / outcome / log entry.
+        self._live_message_item = None
+        if was_at_bottom:
+            self.messages.scrollToBottom()
+
+    def _update_live_message(self, text: str) -> None:
+        """Update the current live progress line in place, or create one.
+
+        Used by the download-progress hook to render ``%``/size/speed/ETA
+        without flooding the list — every tick refreshes the same item
+        instead of appending a new one.
+        """
+        was_at_bottom = self._messages_at_bottom()
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        formatted = f"[{timestamp}]  {text}"
+        if self._live_message_item is None:
+            item = QListWidgetItem(formatted)
+            item.setForeground(_MESSAGE_COLORS["info"])
+            self.messages.addItem(item)
+            self._live_message_item = item
+        else:
+            self._live_message_item.setText(formatted)
+        if was_at_bottom:
+            self.messages.scrollToBottom()
 
     # ---- worker signal handlers -----------------------------------------
 
     def _on_progress(self, frac: float, msg: str) -> None:
         frac = max(0.0, min(1.0, frac))
         self.progress.setValue(round(frac * 1000))
-        self.statusBar().showMessage(msg)
+        # Progress hooks fire on every byte tick, so only log when the human
+        # readable phase string actually changes.
+        if msg and msg != self._last_progress_msg:
+            self._last_progress_msg = msg
+            self._append_message(msg)
 
     def _on_track_finished(
         self, idx: int, total: int, title: str, ok: bool, msg: str
     ) -> None:
-        marker = "OK " if ok else "FAIL"
-        item = QListWidgetItem(f"[{idx:02d}/{total:02d}] {marker}  {title}")
-        if not ok:
-            item.setToolTip(msg)
-            item.setForeground(Qt.GlobalColor.red)
-        else:
-            item.setToolTip(msg)
-        self.results.addItem(item)
-        self.results.scrollToBottom()
+        marker = "OK  " if ok else "FAIL"
+        text = f"[{idx:02d}/{total:02d}] {marker}  {title}"
+        self._append_message(
+            text,
+            kind="success" if ok else "error",
+            tooltip=msg,
+        )
 
     def _append_log(self, text: str) -> None:
-        # Currently funneled into the status bar; could grow into a real log
-        # pane later.
         for line in text.splitlines() or [text]:
-            self.statusBar().showMessage(line)
+            line = line.rstrip()
+            if line:
+                self._append_message(line)
 
     def _on_finished(self, ok: bool, msg: str) -> None:
-        self._set_running(False)
-        self.statusBar().showMessage(msg)
+        # Tear down the worker thread first so ``self._thread`` is cleared,
+        # then refresh form state so the modal below opens against an
+        # already-re-enabled form.
+        self._teardown_thread()
+        self._refresh_form_state()
+        self._append_message(msg, kind="success" if ok else "error")
         if ok:
             QMessageBox.information(self, "Done", msg)
         else:
             QMessageBox.warning(self, "Finished with issues", msg)
-        self._teardown_thread()
 
     def _teardown_thread(self) -> None:
         if self._thread is not None:
@@ -376,25 +544,69 @@ class MainWindow(QMainWindow):
 
     # ---- helpers ---------------------------------------------------------
 
-    def _set_running(self, running: bool) -> None:
-        self.cut_button.setEnabled(not running)
-        self.cancel_button.setEnabled(running)
-        self.yt_fetch_button.setEnabled(not running)
+    def _on_url_changed(self, text: str) -> None:
+        """Re-validate the URL field on every keystroke."""
+        text = text.strip()
+        self.url_error_label.hide()
+        self.url_error_label.setText("")
+
+        if not text:
+            # Empty isn't an error per se — just disables downstream fields.
+            self._url_is_valid = False
+        elif is_shorts_url(text):
+            self._url_is_valid = False
+            self.url_error_label.setText(
+                "YouTube Shorts aren't supported — paste a regular video URL."
+            )
+            self.url_error_label.show()
+        elif youtube_video_id(text) is None:
+            self._url_is_valid = False
+            self.url_error_label.setText(
+                "That doesn't look like a YouTube video URL "
+                "(expected youtube.com/watch?v=… or youtu.be/…)."
+            )
+            self.url_error_label.show()
+        else:
+            self._url_is_valid = True
+
+        self._refresh_form_state()
+
+    def _refresh_form_state(self) -> None:
+        """Single source of truth for which controls are enabled.
+
+        Three independent inputs decide widget state:
+
+        * ``self._url_is_valid`` — set by :meth:`_on_url_changed`.
+        * ``self._thread is not None`` — a cut pipeline is running.
+        * ``self._meta_thread is not None`` — a metadata fetch is running.
+        """
+        cutting = self._thread is not None
+        fetching = self._meta_thread is not None
+        busy = cutting or fetching
+        can_edit_form = self._url_is_valid and not busy
+
+        # The URL field is the one input that's editable except while busy
+        # — users still need to be able to change it before fetching/cutting.
+        self.yt_url_edit.setEnabled(not busy)
+
+        # Fetching needs a valid URL and idle workers.
+        self.yt_fetch_button.setEnabled(self._url_is_valid and not busy)
+        self.yt_fetch_button.setText(
+            "Fetching…" if fetching else "Fetch info from URL"
+        )
+
+        # Everything downstream of the URL is gated behind a valid URL too.
         for w in (
-            self.yt_url_edit,
             self.album_edit,
             self.artist_edit,
             self.tracklist_edit,
             self.output_edit,
+            self.browse_out_button,
         ):
-            w.setEnabled(not running)
+            w.setEnabled(can_edit_form)
 
-    def _set_fetching(self, fetching: bool) -> None:
-        self.yt_fetch_button.setEnabled(not fetching)
-        self.yt_fetch_button.setText(
-            "Fetching…" if fetching else "Fetch info from URL"
-        )
-        self.cut_button.setEnabled(not fetching)
+        self.cut_button.setEnabled(can_edit_form and not cutting)
+        self.cancel_button.setEnabled(cutting)
 
     def _error(self, msg: str) -> None:
         QMessageBox.warning(self, "Missing input", msg)
@@ -416,7 +628,8 @@ class MainWindow(QMainWindow):
 
 def _load_stylesheet() -> str:
     try:
-        return resources.files("slicer.ui").joinpath("styles.qss").read_text(encoding="utf-8")
+        # return resources.files("slicer.ui").joinpath("styles.qss").read_text(encoding="utf-8")
+        return resources.files("slicer.ui").read_text(encoding="utf-8")
     except (FileNotFoundError, ModuleNotFoundError, OSError):
         return ""
 
@@ -424,7 +637,7 @@ def _load_stylesheet() -> str:
 def run_app(argv: list[str]) -> int:
     app = QApplication(argv)
     app.setApplicationName("yt2mp3slicer")
-    app.setApplicationDisplayName("YT → MP3 Slicer")
+    app.setApplicationDisplayName("YouTube → MP3 Slicer")
     app.setOrganizationName("yt2mp3slicer")
 
     qss = _load_stylesheet()

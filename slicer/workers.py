@@ -17,7 +17,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 from slicer.core import ffmpeg, tagger
 from slicer.core.detect import detect_tracklist
-from slicer.core.naming import track_filename
+from slicer.core.naming import safe_filename, track_filename
 from slicer.core.tracklist import Track, TracklistError, parse_tracklist
 
 
@@ -28,6 +28,10 @@ class MetadataWorker(QObject):
     detected = Signal(object)  # DetectionResult
     # Emitted with a friendly error message on failure.
     failed = Signal(str)
+    # Emitted with short progress strings as detection moves between sources
+    # (chapters → description → top comments). The GUI shows these in the
+    # Messages list so the user knows why a slow comments fetch is happening.
+    statusChanged = Signal(str)
 
     def __init__(self, url: str, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -36,7 +40,10 @@ class MetadataWorker(QObject):
     @Slot()
     def run(self) -> None:
         try:
-            result = detect_tracklist(self._url)
+            result = detect_tracklist(
+                self._url,
+                on_status=self.statusChanged.emit,
+            )
         except Exception as exc:
             # Most yt-dlp errors are quite verbose; collapse to first line.
             msg = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
@@ -61,6 +68,9 @@ class PipelineWorker(QObject):
 
     # fraction in [0, 1], status message
     progressChanged = Signal(float, str)
+    # Rich, in-place "live" line: "45%  •  12.4 MB / 27.5 MB  •  1.8 MB/s  •  ETA 0:08"
+    # The GUI updates a single QListWidgetItem in place rather than appending.
+    progressDetail = Signal(str)
     # idx (1-based), total, title, ok, message
     trackFinished = Signal(int, int, str, bool, str)
     # general log line
@@ -116,6 +126,11 @@ class PipelineWorker(QObject):
                 # Map yt-dlp progress to the first ~15% of the overall bar.
                 self.progressChanged.emit(min(frac * 0.15, 0.15), msg)
 
+            def _ydl_progress_detail(text: str) -> None:
+                # Rich live line — the GUI updates in place rather than
+                # appending one item per tick.
+                self.progressDetail.emit(text)
+
             # Point yt-dlp's FFmpegExtractAudio postprocessor at the same
             # binaries the cutter uses; otherwise it falls back to PATH and
             # fails inside frozen .app/.exe bundles where PATH is minimal.
@@ -123,6 +138,7 @@ class PipelineWorker(QObject):
                 job.youtube_url,
                 tmp_dir,
                 on_progress=_ydl_progress,
+                on_progress_detail=_ydl_progress_detail,
                 ffmpeg_location=str(Path(bins.ffmpeg).parent),
             )
             source_mp3 = result.path
@@ -135,7 +151,8 @@ class PipelineWorker(QObject):
         except Exception as exc:
             tb = traceback.format_exc()
             self.logLine.emit(tb)
-            self.finished.emit(False, f"Error: {exc}")
+            msg = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
+            self.finished.emit(False, f"Error: {msg}")
             return
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -167,7 +184,18 @@ class PipelineWorker(QObject):
             )
             return
 
-        job.output_dir.mkdir(parents=True, exist_ok=True)
+        # Group all tracks under a per-album subfolder so multiple cuts into
+        # the same chosen folder don't pile up into one giant flat list. The
+        # album name is run through the same filename sanitiser as the track
+        # titles so it's safe on every platform; if the album field is empty
+        # (shouldn't happen — the GUI requires it — but guard anyway), we
+        # write straight into the chosen folder as before.
+        album_subdir = safe_filename(job.album.strip()) if job.album.strip() else None
+        album_folder = (
+            job.output_dir / album_subdir if album_subdir else job.output_dir
+        )
+        album_folder.mkdir(parents=True, exist_ok=True)
+        self.logLine.emit(f"Writing tracks to {album_folder}")
 
         n = len(tracks)
         ok_count = 0
@@ -183,7 +211,7 @@ class PipelineWorker(QObject):
             self.progressChanged.emit(frac_start, f"Cutting {i + 1}/{n}: {t.title}")
 
             end = tracks[i + 1].start if i + 1 < n else None
-            dest = job.output_dir / track_filename(t.index, n, t.title)
+            dest = album_folder / track_filename(t.index, n, t.title)
 
             try:
                 ffmpeg.cut_segment(source_mp3, dest, t.start, end, bins=bins)
@@ -212,4 +240,4 @@ class PipelineWorker(QObject):
                 f"Finished with {len(failed)} failure(s): {', '.join(failed)}",
             )
         else:
-            self.finished.emit(True, f"All {ok_count} tracks written to {job.output_dir}.")
+            self.finished.emit(True, f"All {ok_count} tracks written to {album_folder}.")

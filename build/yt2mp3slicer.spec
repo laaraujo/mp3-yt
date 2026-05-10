@@ -25,7 +25,8 @@ ROOT = Path(SPECPATH).parent
 
 datas = [
     # Stylesheet must live next to the package so importlib.resources finds it.
-    (str(ROOT / "slicer" / "ui" / "styles.qss"), "slicer/ui"),
+    #(str(ROOT / "slicer" / "ui" / "styles.qss"), "slicer/ui"),
+    (str(ROOT / "slicer" / "ui" ), "slicer/ui"),
 ]
 
 binaries = []
@@ -90,8 +91,8 @@ if sys.platform == "darwin":
         icon=None,
         bundle_identifier="com.lautaro.yt2mp3slicer",
         info_plist={
-            "CFBundleName": "YT → MP3 Slicer",
-            "CFBundleDisplayName": "YT → MP3 Slicer",
+            "CFBundleName": "YouTube → MP3 Slicer",
+            "CFBundleDisplayName": "YouTube → MP3 Slicer",
             "CFBundleShortVersionString": "0.1.0",
             "CFBundleVersion": "0.1.0",
             "NSHighResolutionCapable": True,

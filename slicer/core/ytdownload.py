@@ -9,9 +9,40 @@ pointing at the directory containing both binaries.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+
+
+# Player clients (in preference order) that yt-dlp should try when talking to
+# YouTube. yt-dlp's anonymous defaults (currently ``android_vr`` + ``web_safari``)
+# are increasingly hit by YouTube's "Sign in to confirm you're not a bot"
+# challenge. The ``android`` client still slips past the challenge in most
+# cases AND returns playable audio formats, while ``ios`` / ``mweb`` /
+# ``tv_simply`` / ``web_safari`` are kept as fallbacks for the day ``android``
+# stops working. Override safely from a single place.
+_PREFERRED_YT_PLAYER_CLIENTS: tuple[str, ...] = (
+    "android",
+    "ios",
+    "mweb",
+    "tv_simply",
+    "web_safari",
+)
+
+
+def _apply_anti_bot(opts: dict) -> None:
+    """Tweak yt-dlp ``opts`` to reduce how often YouTube's anti-bot kicks in.
+
+    Currently this just nudges yt-dlp toward player clients that aren't
+    routinely PoT-challenged. It's deliberately a no-op for non-YouTube
+    URLs because ``extractor_args`` is namespaced.
+    """
+    existing = opts.get("extractor_args") or {}
+    yt_args = dict(existing.get("youtube") or {})
+    # Don't clobber an explicit caller-provided player_client.
+    yt_args.setdefault("player_client", list(_PREFERRED_YT_PLAYER_CLIENTS))
+    opts["extractor_args"] = {**existing, "youtube": yt_args}
 
 
 @dataclass(frozen=True)
@@ -41,8 +72,74 @@ class VideoMetadata:
     chapters: list[Chapter]
 
 
+@dataclass(frozen=True)
+class Comment:
+    """A single top-level YouTube comment."""
+
+    text: str
+    author: str
+    like_count: int
+
+
 ProgressCallback = Callable[[float, str], None]
 """Receives (fraction in [0, 1], status message)."""
+
+ProgressDetailCallback = Callable[[str], None]
+"""Receives a single human-readable progress line, e.g.
+``'45.0%  •  12.4 MB / 27.5 MB  •  1.8 MB/s  •  ETA 0:08'``.
+
+Designed to be wired into a UI element that updates in place rather than
+appending a new line per tick — the caller is expected to throttle UI work
+itself if needed (this module already throttles emission to ~4×/s)."""
+
+
+def _human_bytes(n: float) -> str:
+    """Format ``n`` bytes as a short human-readable string (KiB-style steps)."""
+    n = max(0.0, float(n))
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024:
+            return f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} TB"
+
+
+def _format_eta(seconds: int | float) -> str:
+    """Format an ETA in seconds as ``M:SS`` (or ``H:MM:SS`` if ≥ 1 hour)."""
+    s = max(0, int(seconds))
+    h, rem = divmod(s, 3600)
+    m, s = divmod(rem, 60)
+    if h > 0:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
+def _format_download_progress(d: dict) -> str:
+    """Build the single-line progress string from yt-dlp's hook dict.
+
+    The dict's ``total_bytes`` may be missing or fall back to
+    ``total_bytes_estimate``; ``speed`` and ``eta`` may be ``None`` early in
+    the download. We omit any segment we can't compute rather than printing
+    ``None`` or ``0.0%``.
+    """
+    downloaded = float(d.get("downloaded_bytes") or 0)
+    total = float(d.get("total_bytes") or d.get("total_bytes_estimate") or 0)
+    speed = d.get("speed")    # bytes/sec, may be None
+    eta = d.get("eta")        # seconds, may be None
+
+    parts: list[str] = []
+    if total > 0:
+        pct = (downloaded / total) * 100
+        parts.append(f"{pct:5.1f}%")
+        parts.append(f"{_human_bytes(downloaded)} / {_human_bytes(total)}")
+    else:
+        parts.append(_human_bytes(downloaded))
+
+    if speed:
+        parts.append(f"{_human_bytes(speed)}/s")
+    if eta is not None:
+        parts.append(f"ETA {_format_eta(eta)}")
+
+    return "  •  ".join(parts)
 
 
 def fetch_metadata(url: str) -> VideoMetadata:
@@ -62,6 +159,7 @@ def fetch_metadata(url: str) -> VideoMetadata:
         # We don't need the comments fetch for chapter/description detection,
         # which keeps this fast (sub-second on a healthy connection).
     }
+    _apply_anti_bot(opts)
     with YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
 
@@ -88,18 +186,99 @@ def fetch_metadata(url: str) -> VideoMetadata:
     )
 
 
+def fetch_top_comments(url: str, *, limit: int = 10) -> list[Comment]:
+    """Return up to ``limit`` top-level comments, sorted by like count.
+
+    yt-dlp's ``getcomments`` flag normally walks every comment thread, which is
+    very slow on popular videos. We cap retrieval via ``max_comments`` so the
+    whole call stays under a couple of seconds even for big videos. Replies are
+    skipped entirely (we only want top-level threads to scan for tracklists).
+
+    Comments are requested ordered by YouTube's ``top`` sort (yt-dlp's default),
+    then resorted client-side by ``like_count`` desc as a safety net for cases
+    where YouTube returns them in a different order.
+
+    Never raises: on any yt-dlp error we just return ``[]`` so the caller can
+    move on to the next detection strategy.
+    """
+    from yt_dlp import YoutubeDL
+
+    cap = max(1, limit)
+    # max_comments format (per yt-dlp wiki):
+    #   1. total comments to download
+    #   2. top-level comments
+    #   3. replies per top-level comment
+    #   4. top-level threads to fetch replies from
+    # We deliberately ask for a few more than ``limit`` so the post-sort by
+    # like_count has some headroom.
+    pool = cap * 2
+    opts: dict = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "noplaylist": True,
+        "getcomments": True,
+        "extractor_args": {
+            "youtube": {
+                "max_comments": [f"{pool},{pool},0,{pool}"],
+                "comment_sort": ["top"],
+            }
+        },
+    }
+    _apply_anti_bot(opts)
+
+    try:
+        with YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception:
+        return []
+
+    raw = info.get("comments") or []
+    comments: list[Comment] = []
+    for c in raw:
+        # Top-level only: yt-dlp marks replies with a non-"root" parent id.
+        if c.get("parent") not in (None, "", "root"):
+            continue
+        text = str(c.get("text") or "").strip()
+        if not text:
+            continue
+        try:
+            likes = int(c.get("like_count") or 0)
+        except (TypeError, ValueError):
+            likes = 0
+        comments.append(
+            Comment(
+                text=text,
+                author=str(c.get("author") or "").strip(),
+                like_count=likes,
+            )
+        )
+
+    comments.sort(key=lambda c: c.like_count, reverse=True)
+    return comments[:cap]
+
+
 def download_as_mp3(
     url: str,
     out_dir: Path,
     *,
     on_progress: ProgressCallback | None = None,
+    on_progress_detail: ProgressDetailCallback | None = None,
     quality_kbps: int = 192,
     ffmpeg_location: str | Path | None = None,
 ) -> DownloadResult:
     """Download ``url`` into ``out_dir`` as an MP3 file and return the result.
 
-    ``on_progress`` is called from yt-dlp's worker thread with download
-    progress; do not touch Qt widgets directly from inside it.
+    ``on_progress`` is called from yt-dlp's worker thread with phase changes
+    and a ``[0, 1]`` fraction suitable for a progress bar.
+
+    ``on_progress_detail`` is called from the same thread with a richer human
+    readable string (``percent / size / speed / ETA``) intended to drive a
+    "live" status line that updates in place. We throttle these callbacks to
+    roughly every 250 ms so the UI doesn't get hammered during fast downloads.
+
+    Neither callback should touch Qt widgets directly — marshal back to the
+    GUI thread via signals.
 
     ``ffmpeg_location`` is forwarded to yt-dlp so its ``FFmpegExtractAudio``
     postprocessor can find ffmpeg/ffprobe in our bundled location instead of
@@ -112,18 +291,30 @@ def download_as_mp3(
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Throttle state for the detail callback. yt-dlp's hook fires on every
+    # network read which can be 10-50× per second on a fast connection.
+    detail_state = {"last_emit": 0.0}
+    detail_min_interval_s = 0.25
+
     def _hook(d: dict) -> None:
-        if not on_progress:
-            return
         status = d.get("status")
         if status == "downloading":
             total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
             done = d.get("downloaded_bytes") or 0
             frac = (done / total) if total else 0.0
             # Reserve the last 10% of the bar for the ffmpeg extraction step.
-            on_progress(min(frac * 0.9, 0.9), "Downloading audio...")
+            if on_progress:
+                on_progress(min(frac * 0.9, 0.9), "Downloading audio...")
+            if on_progress_detail:
+                now = time.monotonic()
+                if now - detail_state["last_emit"] >= detail_min_interval_s:
+                    detail_state["last_emit"] = now
+                    on_progress_detail(_format_download_progress(d))
         elif status == "finished":
-            on_progress(0.9, "Extracting audio to MP3...")
+            if on_progress:
+                on_progress(0.9, "Extracting audio to MP3...")
+            # No detail update on finish — the next phase header (set by the
+            # caller) will end the live download line cleanly.
 
     ydl_opts: dict = {
         "format": "bestaudio/best",
@@ -131,6 +322,10 @@ def download_as_mp3(
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
+        # We render our own progress in the GUI; suppress yt-dlp's default
+        # console progress line so it doesn't double-print when running from
+        # a terminal locally.
+        "noprogress": True,
         "progress_hooks": [_hook],
         "postprocessors": [
             {
@@ -146,6 +341,7 @@ def download_as_mp3(
     }
     if ffmpeg_location is not None:
         ydl_opts["ffmpeg_location"] = str(ffmpeg_location)
+    _apply_anti_bot(ydl_opts)
 
     with YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)

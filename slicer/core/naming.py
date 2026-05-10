@@ -8,6 +8,12 @@ import re
 # macOS / Linux in some shells). We replace each with an underscore.
 _ILLEGAL_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
+# Trailing dots and spaces in a filename make Windows refuse to open the file,
+# so we strip *all* of them from the end in one pass — this catches alternating
+# patterns like ``"Track . ."`` that a single ``.strip().strip(".")`` chain
+# would leave a trailing space behind in.
+_TRAILING_DOTS_SPACES_RE = re.compile(r"[. ]+$")
+
 
 def safe_filename(name: str, *, max_len: int = 180) -> str:
     """Return a version of ``name`` that's safe to use as a filename component.
@@ -18,11 +24,12 @@ def safe_filename(name: str, *, max_len: int = 180) -> str:
     * Truncates to ``max_len`` to leave room for the extension and prefix.
     """
     cleaned = _ILLEGAL_RE.sub("_", name)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip().strip(".")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = _TRAILING_DOTS_SPACES_RE.sub("", cleaned)
     if not cleaned:
         cleaned = "track"
     if len(cleaned) > max_len:
-        cleaned = cleaned[:max_len].rstrip().strip(".")
+        cleaned = _TRAILING_DOTS_SPACES_RE.sub("", cleaned[:max_len])
     return cleaned
 
 

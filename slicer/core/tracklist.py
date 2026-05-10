@@ -2,14 +2,14 @@
 
 Accepted line shapes (whitespace-tolerant)::
 
-    0:00 Emerald Hill Zone
-    03:01 Spring Yard Zone
+    0:00 Intro
+    03:01 Sunrise
     1:23:45 A Long Bonus Track
-    1. 0:00 Emerald Hill Zone
-    01) 0:00 Emerald Hill Zone
-    1 - 0:00 Emerald Hill Zone
-    [00:00] Emerald Hill Zone
-    0:00 - Emerald Hill Zone
+    1. 0:00 Intro
+    01) 0:00 Intro
+    1 - 0:00 Intro
+    [00:00] Intro
+    0:00 - Intro
 
 Blank lines and comment lines starting with ``#`` are ignored.
 """

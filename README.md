@@ -1,11 +1,19 @@
 # yt2mp3slicer
 
-A small cross-platform desktop app that downloads a YouTube video and
+A small cross-platform desktop app that downloads a **long** YouTube
+video — typically a full-album upload, DJ mix, or OST compilation — and
 splits its audio into individually-tagged MP3 tracks based on a
 `mm:ss Title` tracklist. Runs on **Windows**, **macOS**, and **Linux**.
 
+> **Looking to grab a single song as MP3?** This isn't the right tool.
+> yt2mp3slicer's whole purpose is to *slice* one long video into many
+> tagged tracks. If you just want to download a single video as one MP3
+> file, any of the dozens of free online "YouTube to MP3" converters
+> will do that in one click — no install required.
+
 - Downloads via `yt-dlp` and cuts the audio losslessly (`ffmpeg -c copy`).
-- **Auto-detects** the tracklist from the video's chapters or description.
+- **Auto-detects** the tracklist from the video's chapters, description,
+  or top comments.
 - Writes ID3v2 tags (title, artist, album, track number) automatically.
 
 ## Install
@@ -24,10 +32,10 @@ bundled, nothing else to install.
 
 1. Paste a YouTube URL.
 2. Click *Fetch info from URL* to auto-fill the album, artist, and tracklist
-   from the video's chapters or description.
+   from the video's chapters, description, or top comments.
 3. Confirm/edit the album, artist, and tracklist.
 4. Pick an output folder.
-5. Click **Cut into tracks**.
+5. Click **Cut and download**.
 
 ### Tracklist format
 
@@ -35,8 +43,8 @@ One line per track: `mm:ss Title`. `H:MM:SS` works for 1+ hour videos.
 Leading track numbers (`1.`, `01)`, `1 -`) and ` - ` separators are tolerated.
 
 ```
-0:00 Emerald Hill Zone
-3:01 Spring Yard Zone
+0:00 Intro
+3:01 Sunrise
 1:23:45 A Long Bonus Track
 ```
 
@@ -45,9 +53,11 @@ end of the source file.
 
 ### Output
 
-Files are written into your chosen folder as
-`01 - Emerald Hill Zone.mp3`, `02 - Spring Yard Zone.mp3`, … each tagged
-with `title`, `artist`, `album`, `albumartist`, and `tracknumber: N/Total`.
+Inside your chosen folder, the app creates a subfolder named after the
+album (for example `Echoes of Tomorrow/`) and writes the cuts there as
+`01 - Intro.mp3`, `02 - Sunrise.mp3`, … each tagged with `title`, `artist`,
+`album`, `albumartist`, and `tracknumber: N/Total`. This keeps multiple
+albums tidy when you reuse the same output folder.
 
 ## Develop
 

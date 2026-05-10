@@ -6,8 +6,12 @@ Order of preference:
    exactly what the uploader intended as the splits.
 2. **Description scan** — many uploaders still write the tracklist directly
    in the description as ``mm:ss Title`` lines.
+3. **Top comments** — for community-shared videos the tracklist is often
+   pinned (or just very upvoted) in the comments. We fetch up to the top 10
+   comments and scan each of them in like-count order, returning the first
+   one that yields a usable tracklist.
 
-If neither produces 2+ entries we return :class:`DetectionResult` with
+If none of those produce 2+ entries we return :class:`DetectionResult` with
 ``source=None`` and an empty ``tracks`` list, so the caller can still fill
 album/artist hints from the same metadata fetch.
 """
@@ -15,15 +19,25 @@ album/artist hints from the same metadata fetch.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from slicer.core.tracklist import Track, find_tracklist_in_text
-from slicer.core.ytdownload import Chapter, VideoMetadata, fetch_metadata
+from slicer.core.ytdownload import (
+    Chapter,
+    VideoMetadata,
+    fetch_metadata,
+    fetch_top_comments,
+)
+
+StatusCallback = Callable[[str], None]
+"""Receives short human-readable progress strings during detection."""
 
 
 @dataclass(frozen=True)
 class DetectionResult:
-    source: str | None     # "chapters" | "description" | None
+    # "chapters" | "description" | "comments" | None
+    source: str | None
     tracks: list[Track]
     metadata: VideoMetadata
     # Optional best-guess artist/album parsed from the video title
@@ -60,14 +74,30 @@ def guess_artist_and_album(video_title: str) -> tuple[str | None, str | None]:
     return artist, album
 
 
-def detect_tracklist(url: str) -> DetectionResult:
-    """Fetch metadata for ``url`` and return whatever tracklist we can detect."""
+def detect_tracklist(
+    url: str,
+    *,
+    on_status: StatusCallback | None = None,
+) -> DetectionResult:
+    """Fetch metadata for ``url`` and return whatever tracklist we can detect.
+
+    ``on_status`` is an optional callback that receives a short, user-facing
+    string before each detection step (chapters → description → comments).
+    The GUI layer hooks into it so the user sees progress while a slow
+    comments fetch is happening.
+    """
+    def _say(msg: str) -> None:
+        if on_status is not None:
+            on_status(msg)
+
     metadata = fetch_metadata(url)
     artist, album = guess_artist_and_album(metadata.title)
 
+    _say("Trying to get tracklist from chapters…")
     if metadata.chapters:
         tracks = chapters_to_tracks(metadata.chapters)
         if len(tracks) >= 2:
+            _say(f"Found tracklist in video chapters ({len(tracks)} tracks).")
             return DetectionResult(
                 source="chapters",
                 tracks=tracks,
@@ -76,8 +106,13 @@ def detect_tracklist(url: str) -> DetectionResult:
                 guessed_album=album,
             )
 
+    _say("Trying to get tracklist from description…")
     desc_tracks = find_tracklist_in_text(metadata.description)
     if desc_tracks:
+        _say(
+            f"Found tracklist in video description "
+            f"({len(desc_tracks)} tracks)."
+        )
         return DetectionResult(
             source="description",
             tracks=desc_tracks,
@@ -85,6 +120,26 @@ def detect_tracklist(url: str) -> DetectionResult:
             guessed_artist=artist,
             guessed_album=album,
         )
+
+    # Last resort: scan up to the top 10 comments. We only fetch them now —
+    # the chapters/description path stays as fast as before for the common
+    # case where one of those hits.
+    _say("Trying to get tracklist from top comments…")
+    for comment in fetch_top_comments(url, limit=10):
+        comment_tracks = find_tracklist_in_text(comment.text)
+        if comment_tracks:
+            who = comment.author or "an unknown user"
+            _say(
+                f"Found tracklist in top comment by {who} "
+                f"({len(comment_tracks)} tracks)."
+            )
+            return DetectionResult(
+                source="comments",
+                tracks=comment_tracks,
+                metadata=metadata,
+                guessed_artist=artist,
+                guessed_album=album,
+            )
 
     return DetectionResult(
         source=None,
