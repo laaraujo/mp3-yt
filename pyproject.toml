@@ -23,6 +23,7 @@ dependencies = [
     # Keep macOS release builds usable on older Intel Macs. PySide6 6.8+
     # raises the macOS wheel target beyond 11.0, and 6.10+ requires 13.0.
     "PySide6>=6.7,<6.8",
+    "certifi>=2024.8.30",
     "mutagen>=1.47,<2",
     "yt-dlp>=2024.8.6",
 ]

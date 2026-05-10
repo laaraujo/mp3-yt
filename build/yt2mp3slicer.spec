@@ -13,6 +13,12 @@ from pathlib import Path
 ROOT = Path(SPECPATH).parent
 
 datas = []
+try:
+    import certifi
+except ImportError:
+    pass
+else:
+    datas.append((certifi.where(), "certifi"))
 
 binaries = []
 ffmpeg_dir = ROOT / "build" / "ffmpeg-bin"
