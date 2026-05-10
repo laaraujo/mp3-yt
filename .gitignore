@@ -4,13 +4,12 @@ __pycache__/
 *$py.class
 *.egg-info/
 .eggs/
-build/
-dist/
 
 # Virtualenvs
 .venv/
 venv/
 env/
+.venv-build/
 
 # IDE / OS
 .vscode/
@@ -24,10 +23,12 @@ Thumbs.db
 output/
 tmp/
 
-# Windows build artifacts
+# PyInstaller / packaging artifacts
+# Keep build/yt2mp3slicer.spec tracked; ignore everything PyInstaller and the
+# build scripts generate inside build/ and dist/.
 dist/
 build/build/
 build/ffmpeg-bin/
 build/ffmpeg.zip
+build/ffmpeg.tar.xz
 build/ffmpeg-extracted/
-.venv-build/
