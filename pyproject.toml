@@ -6,7 +6,7 @@ version = "0.1.0"
 description = "Download a long YouTube video and slice it into individually-tagged MP3 tracks."
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 authors = [{ name = "Lautaro Araujo" }]
 keywords = ["youtube", "mp3", "audio", "slicer", "yt-dlp", "ffmpeg"]
 classifiers = [
@@ -20,7 +20,9 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio",
 ]
 dependencies = [
-    "PySide6>=6.7,<7",
+    # Keep macOS release builds usable on older Intel Macs. PySide6 6.8+
+    # raises the macOS wheel target beyond 11.0, and 6.10+ requires 13.0.
+    "PySide6>=6.7,<6.8",
     "mutagen>=1.47,<2",
     "yt-dlp>=2024.8.6",
 ]

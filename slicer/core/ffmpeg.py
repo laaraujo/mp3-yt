@@ -57,6 +57,26 @@ def _binary_name(name: str) -> str:
     return f"{name}.exe" if sys.platform.startswith("win") else name
 
 
+def _subprocess_startup_kwargs() -> dict:
+    """Hide child ffmpeg/ffprobe consoles in Windows GUI builds."""
+    if not sys.platform.startswith("win"):
+        return {}
+
+    kwargs: dict = {}
+    startupinfo_factory = getattr(subprocess, "STARTUPINFO", None)
+    if startupinfo_factory is not None:
+        startupinfo = startupinfo_factory()
+        startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+        startupinfo.wShowWindow = getattr(subprocess, "SW_HIDE", 0)
+        kwargs["startupinfo"] = startupinfo
+
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    if creationflags:
+        kwargs["creationflags"] = creationflags
+
+    return kwargs
+
+
 def find_binaries() -> FfmpegBinaries:
     """Locate ``ffmpeg`` and ``ffprobe``.
 
@@ -97,7 +117,7 @@ def probe_duration(path: Path, *, bins: FfmpegBinaries | None = None) -> float:
         str(path),
     ]
     try:
-        out = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        out = subprocess.run(cmd, check=True, capture_output=True, text=True, **_subprocess_startup_kwargs())
     except subprocess.CalledProcessError as exc:
         raise FfmpegError(f"ffprobe failed for {path}: {exc.stderr.strip() or exc}") from exc
     try:
@@ -156,6 +176,6 @@ def cut_segment(
     ]
 
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        subprocess.run(cmd, check=True, capture_output=True, text=True, **_subprocess_startup_kwargs())
     except subprocess.CalledProcessError as exc:
         raise FfmpegError(f"ffmpeg failed cutting {src.name} -> {dest.name}: {exc.stderr.strip() or exc}") from exc

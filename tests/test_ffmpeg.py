@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-from slicer.core.ffmpeg import FfmpegNotFoundError, find_binaries
+from slicer.core.ffmpeg import FfmpegNotFoundError, _subprocess_startup_kwargs, find_binaries
 
 
 def test_find_binaries_uses_env_override(tmp_path, monkeypatch):
@@ -37,3 +38,24 @@ def test_find_binaries_raises_when_path_empty(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", str(tmp_path))
     with pytest.raises(FfmpegNotFoundError):
         find_binaries()
+
+
+def test_subprocess_startup_kwargs_hides_windows_console(monkeypatch):
+    """Windows GUI builds must not flash cmd windows for ffmpeg/ffprobe."""
+
+    class FakeStartupInfo:
+        def __init__(self):
+            self.dwFlags = 0
+            self.wShowWindow = None
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(subprocess, "STARTUPINFO", FakeStartupInfo, raising=False)
+    monkeypatch.setattr(subprocess, "STARTF_USESHOWWINDOW", 1, raising=False)
+    monkeypatch.setattr(subprocess, "SW_HIDE", 0, raising=False)
+    monkeypatch.setattr(subprocess, "CREATE_NO_WINDOW", 0x08000000, raising=False)
+
+    kwargs = _subprocess_startup_kwargs()
+
+    assert kwargs["creationflags"] == 0x08000000
+    assert kwargs["startupinfo"].dwFlags == 1
+    assert kwargs["startupinfo"].wShowWindow == 0
