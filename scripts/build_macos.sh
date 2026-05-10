@@ -47,7 +47,9 @@ if [[ "$CLEAN" -eq 1 ]]; then
 fi
 
 echo "Syncing build environment with uv..."
-uv sync --group build
+# --locked: fail if uv.lock drifted from pyproject.toml; release builds
+# must never silently re-resolve.
+uv sync --locked --group build
 
 FFMPEG_DIR="build/ffmpeg-bin"
 if [[ ! -x "$FFMPEG_DIR/ffmpeg" || ! -x "$FFMPEG_DIR/ffprobe" ]]; then

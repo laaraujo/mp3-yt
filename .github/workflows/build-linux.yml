@@ -33,7 +33,9 @@ jobs:
             libdbus-1-3
 
       - name: Sync project venv (runtime + build deps)
-        run: uv sync --group build
+        # --locked: fail if uv.lock is out of date with pyproject.toml so
+        # release builds never silently re-resolve.
+        run: uv sync --locked --group build
 
       - name: Download ffmpeg (BtbN LGPL linux x86_64)
         run: |

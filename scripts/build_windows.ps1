@@ -42,7 +42,9 @@ if ($Clean) {
 }
 
 Write-Host "Syncing build environment with uv..."
-& uv sync --group build
+# --locked: fail if uv.lock drifted from pyproject.toml; release builds
+# must never silently re-resolve.
+& uv sync --locked --group build
 if ($LASTEXITCODE -ne 0) { throw "uv sync failed with exit code $LASTEXITCODE" }
 
 $FfmpegBinDir = "build/ffmpeg-bin"
