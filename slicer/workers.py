@@ -18,6 +18,7 @@ from slicer.core import ffmpeg, tagger
 from slicer.core.detect import detect_tracklist
 from slicer.core.naming import safe_filename, track_filename
 from slicer.core.tracklist import Track, TracklistError, parse_tracklist
+from slicer.core.ytdownload import DownloadCancelledError, download_as_mp3
 
 
 class MetadataWorker(QObject):
@@ -78,7 +79,12 @@ class PipelineWorker(QObject):
 
     @Slot()
     def cancel(self) -> None:
-        """Mark the job for cancellation. Takes effect between tracks."""
+        """Mark the job for cancellation.
+
+        The GUI calls this directly so it takes effect even while ``run`` is
+        blocking the worker thread's Qt event loop. The yt-dlp progress hook
+        checks the flag during download; cutting checks it between tracks.
+        """
         self._cancelled = True
 
     @Slot()
@@ -109,7 +115,6 @@ class PipelineWorker(QObject):
         tmp_dir = Path(tempfile.mkdtemp(prefix="yt2mp3slicer-"))
         try:
             self.logLine.emit(f"Downloading from YouTube to {tmp_dir} ...")
-            from slicer.core.ytdownload import download_as_mp3
 
             def _ydl_progress(frac: float, msg: str) -> None:
                 # Map yt-dlp's progress to the first ~15% of the overall bar.
@@ -125,13 +130,20 @@ class PipelineWorker(QObject):
                 tmp_dir,
                 on_progress=_ydl_progress,
                 on_progress_detail=_ydl_progress_detail,
+                cancel_requested=lambda: self._cancelled,
                 ffmpeg_location=str(Path(bins.ffmpeg).parent),
             )
+            if self._cancelled:
+                self.finished.emit(False, "Cancelled.")
+                return
             source_mp3 = result.path
             self.logLine.emit(f"Downloaded: {result.title} ({result.duration:.0f}s)")
 
             self._cut_all(tracks, source_mp3, bins)
 
+        except DownloadCancelledError:
+            self.finished.emit(False, "Cancelled.")
+            return
         except Exception as exc:
             tb = traceback.format_exc()
             self.logLine.emit(tb)

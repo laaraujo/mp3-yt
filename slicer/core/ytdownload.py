@@ -83,6 +83,13 @@ ProgressDetailCallback = Callable[[str], None]
 
 Throttled here to ~4×/s so the UI doesn't get hammered."""
 
+CancelCallback = Callable[[], bool]
+"""Returns True when the caller wants the in-flight download aborted."""
+
+
+class DownloadCancelledError(RuntimeError):
+    """Raised when the user cancels an in-flight download."""
+
 
 def _human_bytes(n: float) -> str:
     """Format ``n`` bytes as a short human-readable string."""
@@ -234,34 +241,20 @@ def fetch_top_comments(url: str, *, limit: int = 10) -> list[Comment]:
     return comments[:cap]
 
 
-def download_as_mp3(
-    url: str,
-    out_dir: Path,
+def _make_progress_hook(
     *,
-    on_progress: ProgressCallback | None = None,
-    on_progress_detail: ProgressDetailCallback | None = None,
-    quality_kbps: int = 192,
-    ffmpeg_location: str | Path | None = None,
-) -> DownloadResult:
-    """Download ``url`` into ``out_dir`` as an MP3 file.
-
-    ``on_progress`` and ``on_progress_detail`` fire from yt-dlp's worker
-    thread; the caller must marshal back to the GUI thread. Detail
-    callbacks are throttled to ~4×/s.
-
-    ``ffmpeg_location`` is forwarded to yt-dlp so its ``FFmpegExtractAudio``
-    postprocessor can find ffmpeg in our bundled location instead of PATH.
-    """
-    # Lazy import so the GUI starts even if yt_dlp has an import-time issue.
-    from yt_dlp import YoutubeDL
-
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # Throttle the detail callback — the hook fires on every network read.
+    on_progress: ProgressCallback | None,
+    on_progress_detail: ProgressDetailCallback | None,
+    cancel_requested: CancelCallback | None,
+) -> Callable[[dict], None]:
+    """Create the yt-dlp progress hook used by :func:`download_as_mp3`."""
     detail_state = {"last_emit": 0.0}
     detail_min_interval_s = 0.25
 
     def _hook(d: dict) -> None:
+        if cancel_requested is not None and cancel_requested():
+            raise DownloadCancelledError("Cancelled.")
+
         status = d.get("status")
         if status == "downloading":
             total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
@@ -279,6 +272,33 @@ def download_as_mp3(
             if on_progress:
                 on_progress(0.9, "Extracting audio to MP3...")
 
+    return _hook
+
+
+def download_as_mp3(
+    url: str,
+    out_dir: Path,
+    *,
+    on_progress: ProgressCallback | None = None,
+    on_progress_detail: ProgressDetailCallback | None = None,
+    cancel_requested: CancelCallback | None = None,
+    quality_kbps: int = 192,
+    ffmpeg_location: str | Path | None = None,
+) -> DownloadResult:
+    """Download ``url`` into ``out_dir`` as an MP3 file.
+
+    ``on_progress`` and ``on_progress_detail`` fire from yt-dlp's worker
+    thread; the caller must marshal back to the GUI thread. Detail
+    callbacks are throttled to ~4×/s.
+
+    ``ffmpeg_location`` is forwarded to yt-dlp so its ``FFmpegExtractAudio``
+    postprocessor can find ffmpeg in our bundled location instead of PATH.
+    """
+    # Lazy import so the GUI starts even if yt_dlp has an import-time issue.
+    from yt_dlp import YoutubeDL
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     ydl_opts: dict = {
         "format": "bestaudio/best",
         "outtmpl": str(out_dir / "%(title).200B [%(id)s].%(ext)s"),
@@ -287,7 +307,13 @@ def download_as_mp3(
         "no_warnings": True,
         # We render our own progress; suppress yt-dlp's console line.
         "noprogress": True,
-        "progress_hooks": [_hook],
+        "progress_hooks": [
+            _make_progress_hook(
+                on_progress=on_progress,
+                on_progress_detail=on_progress_detail,
+                cancel_requested=cancel_requested,
+            )
+        ],
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -303,10 +329,16 @@ def download_as_mp3(
         ydl_opts["ffmpeg_location"] = str(ffmpeg_location)
     _apply_anti_bot(ydl_opts)
 
+    if cancel_requested is not None and cancel_requested():
+        raise DownloadCancelledError("Cancelled.")
+
     with YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         # After FFmpegExtractAudio the final file is `prepare_filename` with .mp3.
         produced = Path(ydl.prepare_filename(info)).with_suffix(".mp3")
+
+    if cancel_requested is not None and cancel_requested():
+        raise DownloadCancelledError("Cancelled.")
 
     if not produced.exists():
         # Fallback: use the most recently produced mp3 in out_dir.

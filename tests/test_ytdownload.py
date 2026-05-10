@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from slicer.core.ytdownload import (
     _PREFERRED_YT_PLAYER_CLIENTS,
+    DownloadCancelledError,
     _apply_anti_bot,
     _format_download_progress,
     _format_eta,
     _human_bytes,
+    _make_progress_hook,
 )
 
 
@@ -130,3 +132,31 @@ def test_format_download_progress_omits_unknown_segments() -> None:
     assert "/s" not in out
     assert "ETA" not in out
     assert "1.0 KB" in out
+
+
+def test_progress_hook_raises_when_cancel_requested() -> None:
+    hook = _make_progress_hook(
+        on_progress=None,
+        on_progress_detail=None,
+        cancel_requested=lambda: True,
+    )
+
+    try:
+        hook({"status": "downloading", "downloaded_bytes": 1, "total_bytes": 10})
+    except DownloadCancelledError as exc:
+        assert str(exc) == "Cancelled."
+    else:  # pragma: no cover - explicit failure reads better than pytest.raises here
+        raise AssertionError("expected DownloadCancelledError")
+
+
+def test_progress_hook_reports_progress_when_not_cancelled() -> None:
+    calls: list[tuple[float, str]] = []
+    hook = _make_progress_hook(
+        on_progress=lambda frac, msg: calls.append((frac, msg)),
+        on_progress_detail=None,
+        cancel_requested=lambda: False,
+    )
+
+    hook({"status": "downloading", "downloaded_bytes": 50, "total_bytes": 100})
+
+    assert calls == [(0.45, "Downloading audio...")]

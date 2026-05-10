@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from PySide6.QtCore import QSettings, Qt, QThread, Signal
+from PySide6.QtCore import QSettings, Qt, QThread
 from PySide6.QtGui import QColor, QIcon, QTextOption
 from PySide6.QtWidgets import (
     QApplication,
@@ -47,8 +47,6 @@ _SETTINGS_OUTPUT_DIR = "output/last_dir"
 class MainWindow(QMainWindow):
     """The single window that drives the whole app."""
 
-    requestCancel = Signal()
-
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle(f"yt2mp3slicer {__version__}")
@@ -87,12 +85,12 @@ class MainWindow(QMainWindow):
 
         header = QVBoxLayout()
         header.setSpacing(2)
-        title = QLabel("YouTube → MP3 Slicer")
+        # title = QLabel("YouTube → MP3 Slicer")
         subtitle = QLabel(
             "Split a YouTube video into individually-tagged MP3 tracks from a pasted tracklist.",
         )
         subtitle.setWordWrap(True)
-        header.addWidget(title)
+        # header.addWidget(title)
         header.addWidget(subtitle)
         root.addLayout(header)
 
@@ -290,16 +288,18 @@ class MainWindow(QMainWindow):
         self._worker.trackFinished.connect(self._on_track_finished)
         self._worker.logLine.connect(self._append_log)
         self._worker.finished.connect(self._on_finished)
-        self.requestCancel.connect(self._worker.cancel)
 
         self._refresh_form_state()
         self._thread.start()
 
     def _on_cancel_clicked(self) -> None:
         if self._worker is not None:
-            self._append_message("Cancelling after current track…", kind="warning")
+            self._append_message("Cancelling…", kind="warning")
             self.cancel_button.setEnabled(False)
-            self.requestCancel.emit()
+            # Call directly instead of using a queued Qt signal. The worker's
+            # long-running ``run`` method blocks its thread event loop, so a
+            # queued cancellation slot may not execute until the job is done.
+            self._worker.cancel()
 
     # ---- YouTube info fetch ---------------------------------------------
 
@@ -470,10 +470,12 @@ class MainWindow(QMainWindow):
         # Tear down first so the modal opens against a re-enabled form.
         self._teardown_thread()
         self._refresh_form_state()
-        self._append_message(msg, kind="success" if ok else "error")
+        cancelled = not ok and msg == "Cancelled."
+        kind: MessageKind = "success" if ok else "warning" if cancelled else "error"
+        self._append_message(msg, kind=kind)
         if ok:
             QMessageBox.information(self, "Done", msg)
-        else:
+        elif not cancelled:
             QMessageBox.warning(self, "Finished with issues", msg)
 
     def _teardown_thread(self) -> None:
