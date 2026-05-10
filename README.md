@@ -58,6 +58,15 @@ Or use the convenience launchers:
 - Linux / WSL / macOS: `./scripts/run.sh`
 - Windows: `scripts\run.bat`
 
+Or, if you have GNU Make on your `PATH`:
+
+```bash
+make           # show all targets
+make run       # launch the app (picks the right launcher for your OS)
+make test      # run the test suite
+make build     # build for your current OS (alias for build-linux/macos/windows)
+```
+
 ## Tracklist format
 
 Paste lines of the form:
