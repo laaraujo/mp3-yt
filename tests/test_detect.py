@@ -55,6 +55,32 @@ def test_chapters_to_tracks_basic() -> None:
     ]
 
 
+def test_chapters_to_tracks_skips_synthetic_untitled_lead_in() -> None:
+    chapters = [
+        Chapter(start_time=0.0, end_time=8.0, title="<Untitled Chapter 1>"),
+        Chapter(start_time=8.0, end_time=181.0, title="First Song"),
+        Chapter(start_time=181.0, end_time=332.0, title="Second Song"),
+    ]
+
+    tracks = chapters_to_tracks(chapters)
+
+    assert [t.index for t in tracks] == [1, 2]
+    assert [t.start for t in tracks] == [8.0, 181.0]
+    assert [t.title for t in tracks] == ["First Song", "Second Song"]
+
+
+def test_chapters_to_tracks_keeps_real_zero_start_chapter() -> None:
+    chapters = [
+        Chapter(start_time=0.0, end_time=181.0, title="Intro"),
+        Chapter(start_time=181.0, end_time=332.0, title="First Song"),
+    ]
+
+    tracks = chapters_to_tracks(chapters)
+
+    assert [t.start for t in tracks] == [0.0, 181.0]
+    assert [t.title for t in tracks] == ["Intro", "First Song"]
+
+
 def test_guess_artist_and_album_dash_form() -> None:
     artist, album = guess_artist_and_album("Anna Rivers - Echoes of Tomorrow")
     assert artist == "Anna Rivers"

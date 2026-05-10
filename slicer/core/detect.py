@@ -17,6 +17,8 @@ from slicer.core.ytdownload import Chapter, VideoMetadata, fetch_metadata, fetch
 StatusCallback = Callable[[str], None]
 """Receives short progress strings during detection."""
 
+_UNTITLED_LEAD_IN_RE = re.compile(r"^<?untitled chapter \d+>?$", re.IGNORECASE)
+
 
 @dataclass(frozen=True)
 class DetectionResult:
@@ -31,10 +33,26 @@ class DetectionResult:
 
 def chapters_to_tracks(chapters: list[Chapter]) -> list[Track]:
     """Convert yt-dlp chapters into :class:`Track` objects."""
+    if _has_synthetic_untitled_lead_in(chapters):
+        chapters = chapters[1:]
+
     tracks: list[Track] = []
     for i, ch in enumerate(chapters, start=1):
         tracks.append(Track(index=i, start=ch.start_time, title=ch.title))
     return tracks
+
+
+def _has_synthetic_untitled_lead_in(chapters: list[Chapter]) -> bool:
+    """Detect YouTube's auto-added 0:00 placeholder before the first named chapter."""
+    if len(chapters) < 2:
+        return False
+
+    first, second = chapters[0], chapters[1]
+    return (
+        first.start_time <= 0.001
+        and second.start_time > first.start_time
+        and _UNTITLED_LEAD_IN_RE.match(first.title.strip()) is not None
+    )
 
 
 # Strip trailing brackets/parens (e.g. "[Full Album]") before splitting on dash.
