@@ -5,11 +5,11 @@ We avoid actually hitting YouTube; we drive the pure-logic helpers directly.
 
 from __future__ import annotations
 
-from mp3yt.core.detect import (
+from slicer.core.detect import (
     chapters_to_tracks,
     guess_artist_and_album,
 )
-from mp3yt.core.ytdownload import Chapter
+from slicer.core.ytdownload import Chapter
 
 
 def test_chapters_to_tracks_basic() -> None:

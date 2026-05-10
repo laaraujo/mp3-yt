@@ -17,8 +17,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from mp3yt.core.tracklist import Track, find_tracklist_in_text
-from mp3yt.core.ytdownload import Chapter, VideoMetadata, fetch_metadata
+from slicer.core.tracklist import Track, find_tracklist_in_text
+from slicer.core.ytdownload import Chapter, VideoMetadata, fetch_metadata
 
 
 @dataclass(frozen=True)

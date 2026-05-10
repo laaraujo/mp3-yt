@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Build a self-contained macOS .app of mp3-yt-cutter using PyInstaller.
+# Build a self-contained macOS .app of yt2mp3slicer using PyInstaller.
 #
 # Outputs:
-#   dist/mp3-yt-cutter/mp3-yt-cutter           the raw launcher (folder mode)
-#   dist/mp3-yt-cutter.app                     the macOS .app bundle
-#   dist/mp3-yt-cutter-macos-<arch>.zip        shareable zip of the .app
+#   dist/yt2mp3slicer/yt2mp3slicer           the raw launcher (folder mode)
+#   dist/yt2mp3slicer.app                     the macOS .app bundle
+#   dist/yt2mp3slicer-macos-<arch>.zip        shareable zip of the .app
 #
 # The .app is **unsigned and unnotarized**. On first launch users will need
 # to right-click -> Open to bypass Gatekeeper, or run:
-#   xattr -d com.apple.quarantine dist/mp3-yt-cutter.app
+#   xattr -d com.apple.quarantine dist/yt2mp3slicer.app
 #
 # ffmpeg / ffprobe are sourced from Homebrew. PyInstaller follows their
 # dylib dependencies and bundles the relevant Homebrew dylibs into the
@@ -57,7 +57,6 @@ fi
 
 "$PY" -m pip install --upgrade pip >/dev/null
 "$PY" -m pip install -r requirements.txt
-"$PY" -m pip install -e .
 "$PY" -m pip install pyinstaller
 
 # 3. Pull ffmpeg/ffprobe from Homebrew ----------------------------------
@@ -87,17 +86,17 @@ echo "Running PyInstaller..."
 "$PY" -m PyInstaller --noconfirm --clean \
   --workpath build/build \
   --distpath dist \
-  build/mp3-yt-cutter.spec
+  build/yt2mp3slicer.spec
 
 # 5. Verify and zip the .app ---------------------------------------------
-APP="dist/mp3-yt-cutter.app"
+APP="dist/yt2mp3slicer.app"
 if [[ ! -d "$APP" ]]; then
   echo "Build did not produce $APP" >&2
   exit 1
 fi
 
 ARCH="$(uname -m)"
-ZIP="dist/mp3-yt-cutter-macos-${ARCH}.zip"
+ZIP="dist/yt2mp3slicer-macos-${ARCH}.zip"
 
 # Use ditto so resource forks and symlinks (Frameworks/) are preserved.
 rm -f "$ZIP"

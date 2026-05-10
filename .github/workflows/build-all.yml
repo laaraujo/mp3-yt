@@ -47,9 +47,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           # Each per-platform workflow uploaded an artifact with a name
-          # starting with "mp3-yt-cutter-". Merge them all into a single
+          # starting with "yt2mp3slicer-". Merge them all into a single
           # local folder.
-          pattern: mp3-yt-cutter-*
+          pattern: yt2mp3slicer-*
           path: release-files
           merge-multiple: true
 
@@ -65,7 +65,7 @@ jobs:
           # wrote.
           tag_name: ${{ github.event.release.tag_name }}
           files: |
-            release-files/mp3-yt-cutter-windows.zip
-            release-files/mp3-yt-cutter-linux-x86_64.tar.gz
-            release-files/mp3-yt-cutter-macos-*.zip
+            release-files/yt2mp3slicer-windows.zip
+            release-files/yt2mp3slicer-linux-x86_64.tar.gz
+            release-files/yt2mp3slicer-macos-*.zip
           fail_on_unmatched_files: true

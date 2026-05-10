@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Build a self-contained Linux binary of mp3-yt-cutter using PyInstaller.
+# Build a self-contained Linux binary of yt2mp3slicer using PyInstaller.
 #
 # Sets up a build venv (.venv-build), installs runtime + build dependencies,
 # downloads a static ffmpeg/ffprobe build from BtbN/FFmpeg-Builds (LGPL),
-# runs PyInstaller against build/mp3-yt-cutter.spec, and produces a
+# runs PyInstaller against build/yt2mp3slicer.spec, and produces a
 # distributable tarball.
 #
 # Output:
-#   dist/mp3-yt-cutter/mp3-yt-cutter           the launcher binary
-#   dist/mp3-yt-cutter-linux-<arch>.tar.gz     shareable archive
+#   dist/yt2mp3slicer/yt2mp3slicer           the launcher binary
+#   dist/yt2mp3slicer-linux-<arch>.tar.gz     shareable archive
 #
 # Usage:
 #   ./scripts/build_linux.sh           # incremental (reuses ffmpeg + venv)
@@ -42,7 +42,6 @@ fi
 
 "$PY" -m pip install --upgrade pip >/dev/null
 "$PY" -m pip install -r requirements.txt
-"$PY" -m pip install -e .
 "$PY" -m pip install pyinstaller
 
 # 2. Download static ffmpeg/ffprobe --------------------------------------
@@ -97,24 +96,24 @@ echo "Running PyInstaller..."
 "$PY" -m PyInstaller --noconfirm --clean \
   --workpath build/build \
   --distpath dist \
-  build/mp3-yt-cutter.spec
+  build/yt2mp3slicer.spec
 
 # 4. Tarball -------------------------------------------------------------
-DIST_DIR="dist/mp3-yt-cutter"
+DIST_DIR="dist/yt2mp3slicer"
 ARCH="$(uname -m)"
-TARBALL="dist/mp3-yt-cutter-linux-${ARCH}.tar.gz"
+TARBALL="dist/yt2mp3slicer-linux-${ARCH}.tar.gz"
 
-if [[ ! -x "$DIST_DIR/mp3-yt-cutter" ]]; then
-  echo "Build did not produce $DIST_DIR/mp3-yt-cutter" >&2
+if [[ ! -x "$DIST_DIR/yt2mp3slicer" ]]; then
+  echo "Build did not produce $DIST_DIR/yt2mp3slicer" >&2
   exit 1
 fi
 
 rm -f "$TARBALL"
-tar -C dist -czf "$TARBALL" mp3-yt-cutter
+tar -C dist -czf "$TARBALL" yt2mp3slicer
 
 echo
 echo "=== Build complete ==="
 echo "  Folder:  $DIST_DIR"
 echo "  Tarball: $TARBALL"
 echo
-echo "Run it directly: $DIST_DIR/mp3-yt-cutter"
+echo "Run it directly: $DIST_DIR/yt2mp3slicer"

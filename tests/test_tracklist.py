@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mp3yt.core.tracklist import (
+from slicer.core.tracklist import (
     TracklistError,
     find_tracklist_in_text,
     format_timestamp,

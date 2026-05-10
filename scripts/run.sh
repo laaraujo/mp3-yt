@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch mp3-yt-cutter using whichever `python` is on PATH.
+# Launch yt2mp3slicer using whichever `python` is on PATH.
 #
 # Assumes the project virtualenv is already active (so `python` resolves to
 # the venv interpreter with PySide6/yt-dlp/mutagen installed). See the
@@ -7,4 +7,4 @@
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
-exec python -m mp3yt "$@"
+exec python -m slicer "$@"

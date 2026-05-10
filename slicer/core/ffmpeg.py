@@ -40,7 +40,7 @@ def _bundled_search_paths() -> list[Path]:
     paths: list[Path] = []
 
     # 1. Explicit override (handy for tests and portable installs).
-    override = os.environ.get("MP3YT_FFMPEG_DIR")
+    override = os.environ.get("YT2MP3SLICER_FFMPEG_DIR")
     if override:
         paths.append(Path(override))
 
@@ -69,7 +69,7 @@ def find_binaries() -> FfmpegBinaries:
 
     Looks in (in order):
 
-    1. ``MP3YT_FFMPEG_DIR`` env var.
+    1. ``YT2MP3SLICER_FFMPEG_DIR`` env var.
     2. PyInstaller bundle (``_MEIPASS/bin`` and next to the executable).
     3. ``PATH`` via :func:`shutil.which`.
 

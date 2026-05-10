@@ -24,14 +24,13 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStatusBar,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from mp3yt import __version__
-from mp3yt.core.tracklist import format_tracks
-from mp3yt.workers import CutJob, MetadataWorker, PipelineWorker, SourceKind
+from slicer import __version__
+from slicer.core.tracklist import format_tracks
+from slicer.workers import CutJob, MetadataWorker, PipelineWorker
 
 
 class MainWindow(QMainWindow):
@@ -42,7 +41,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle(f"mp3-yt-cutter {__version__}")
+        self.setWindowTitle(f"yt2mp3slicer {__version__}")
         self.resize(820, 760)
 
         self._thread: QThread | None = None
@@ -63,9 +62,9 @@ class MainWindow(QMainWindow):
         # Header
         header = QVBoxLayout()
         header.setSpacing(2)
-        title = QLabel("MP3 / YouTube Cutter", objectName="titleLabel")
+        title = QLabel("YT → MP3 Slicer", objectName="titleLabel")
         subtitle = QLabel(
-            "Split a long MP3 (or a YouTube video) into individually-tagged tracks "
+            "Split a YouTube video into individually-tagged MP3 tracks "
             "from a pasted tracklist.",
             objectName="subtitleLabel",
         )
@@ -74,7 +73,6 @@ class MainWindow(QMainWindow):
         header.addWidget(subtitle)
         root.addLayout(header)
 
-        # Source group (tabbed: Local file / YouTube URL)
         root.addWidget(self._build_source_group())
 
         # Album / artist
@@ -144,25 +142,9 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Ready.")
 
     def _build_source_group(self) -> QGroupBox:
-        box = QGroupBox("Source")
+        box = QGroupBox("YouTube URL")
         layout = QVBoxLayout(box)
-        self.source_tabs = QTabWidget()
 
-        # --- Local file tab ---
-        local_tab = QWidget()
-        local_layout = QHBoxLayout(local_tab)
-        self.local_path_edit = QLineEdit(
-            placeholderText="Path to a long MP3 file (full album, podcast, set, ...)"
-        )
-        browse_local = QPushButton("Browse…")
-        browse_local.clicked.connect(self._pick_local_file)
-        local_layout.addWidget(self.local_path_edit, stretch=1)
-        local_layout.addWidget(browse_local)
-        self.source_tabs.addTab(local_tab, "Local MP3 file")
-
-        # --- YouTube tab ---
-        yt_tab = QWidget()
-        yt_layout = QVBoxLayout(yt_tab)
         url_row = QHBoxLayout()
         self.yt_url_edit = QLineEdit(
             placeholderText="https://www.youtube.com/watch?v=..."
@@ -175,20 +157,18 @@ class MainWindow(QMainWindow):
         self.yt_fetch_button.clicked.connect(self._on_fetch_clicked)
         url_row.addWidget(self.yt_url_edit, stretch=1)
         url_row.addWidget(self.yt_fetch_button)
-        yt_layout.addLayout(url_row)
+        layout.addLayout(url_row)
 
-        yt_hint = QLabel(
+        hint = QLabel(
             "Paste a YouTube URL, then click <b>Fetch info from URL</b> to "
             "auto-detect the tracklist from the video's chapters or description. "
             "The full audio is only downloaded when you press <b>Cut into "
             "tracks</b>."
         )
-        yt_hint.setWordWrap(True)
-        yt_hint.setObjectName("subtitleLabel")
-        yt_layout.addWidget(yt_hint)
-        self.source_tabs.addTab(yt_tab, "YouTube URL")
+        hint.setWordWrap(True)
+        hint.setObjectName("subtitleLabel")
+        layout.addWidget(hint)
 
-        layout.addWidget(self.source_tabs)
         return box
 
     @staticmethod
@@ -200,17 +180,6 @@ class MainWindow(QMainWindow):
         return lbl
 
     # ---- file/folder pickers --------------------------------------------
-
-    def _pick_local_file(self) -> None:
-        start_dir = self.local_path_edit.text() or str(Path.home())
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Choose a source MP3 file",
-            start_dir,
-            "Audio files (*.mp3 *.m4a *.aac *.flac *.wav *.opus *.ogg);;All files (*)",
-        )
-        if path:
-            self.local_path_edit.setText(path)
 
     def _pick_output_dir(self) -> None:
         start_dir = self.output_edit.text() or str(Path.home())
@@ -226,29 +195,15 @@ class MainWindow(QMainWindow):
         if self._thread is not None:
             return  # already running
 
-        # Gather inputs
-        is_youtube = self.source_tabs.currentIndex() == 1
-        if is_youtube:
-            value = self.yt_url_edit.text().strip()
-            kind = SourceKind.YOUTUBE
-            if not value:
-                self._error("Please paste a YouTube URL.")
-                return
-        else:
-            value = self.local_path_edit.text().strip()
-            kind = SourceKind.LOCAL
-            if not value:
-                self._error("Please choose a source MP3 file.")
-                return
-            if not Path(value).expanduser().is_file():
-                self._error(f"File not found:\n{value}")
-                return
-
+        url = self.yt_url_edit.text().strip()
         album = self.album_edit.text().strip()
         artist = self.artist_edit.text().strip()
         tracklist_text = self.tracklist_edit.toPlainText()
         output_dir_str = self.output_edit.text().strip()
 
+        if not url:
+            self._error("Please paste a YouTube URL.")
+            return
         if not album:
             self._error("Please enter an album / disk name.")
             return
@@ -264,13 +219,11 @@ class MainWindow(QMainWindow):
 
         output_dir = Path(output_dir_str).expanduser()
 
-        # Reset UI state
         self.results.clear()
         self.progress.setValue(0)
 
         job = CutJob(
-            source_kind=kind,
-            source_value=value,
+            youtube_url=url,
             album=album,
             artist=artist,
             tracklist_text=tracklist_text,
@@ -428,13 +381,11 @@ class MainWindow(QMainWindow):
         self.cancel_button.setEnabled(running)
         self.yt_fetch_button.setEnabled(not running)
         for w in (
-            self.local_path_edit,
             self.yt_url_edit,
             self.album_edit,
             self.artist_edit,
             self.tracklist_edit,
             self.output_edit,
-            self.source_tabs,
         ):
             w.setEnabled(not running)
 
@@ -465,16 +416,16 @@ class MainWindow(QMainWindow):
 
 def _load_stylesheet() -> str:
     try:
-        return resources.files("mp3yt.ui").joinpath("styles.qss").read_text(encoding="utf-8")
+        return resources.files("slicer.ui").joinpath("styles.qss").read_text(encoding="utf-8")
     except (FileNotFoundError, ModuleNotFoundError, OSError):
         return ""
 
 
 def run_app(argv: list[str]) -> int:
     app = QApplication(argv)
-    app.setApplicationName("mp3-yt-cutter")
-    app.setApplicationDisplayName("MP3 / YouTube Cutter")
-    app.setOrganizationName("mp3yt")
+    app.setApplicationName("yt2mp3slicer")
+    app.setApplicationDisplayName("YT → MP3 Slicer")
+    app.setOrganizationName("yt2mp3slicer")
 
     qss = _load_stylesheet()
     if qss:

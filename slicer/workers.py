@@ -11,20 +11,14 @@ import shutil
 import tempfile
 import traceback
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from mp3yt.core import ffmpeg, tagger
-from mp3yt.core.detect import detect_tracklist
-from mp3yt.core.naming import track_filename
-from mp3yt.core.tracklist import Track, TracklistError, parse_tracklist
-
-
-class SourceKind(str, Enum):
-    LOCAL = "local"
-    YOUTUBE = "youtube"
+from slicer.core import ffmpeg, tagger
+from slicer.core.detect import detect_tracklist
+from slicer.core.naming import track_filename
+from slicer.core.tracklist import Track, TracklistError, parse_tracklist
 
 
 class MetadataWorker(QObject):
@@ -55,8 +49,7 @@ class MetadataWorker(QObject):
 class CutJob:
     """All inputs needed to run one full cut pipeline."""
 
-    source_kind: SourceKind
-    source_value: str          # local path *or* YouTube URL
+    youtube_url: str
     album: str
     artist: str
     tracklist_text: str
@@ -113,30 +106,23 @@ class PipelineWorker(QObject):
             self.finished.emit(False, f"Tracklist error: {exc}")
             return
 
-        # 3. Resolve the actual source MP3 (download if YouTube).
-        tmp_dir: Path | None = None
+        # 3. Download the YouTube audio to a scratch directory.
+        tmp_dir = Path(tempfile.mkdtemp(prefix="yt2mp3slicer-"))
         try:
-            if job.source_kind is SourceKind.YOUTUBE:
-                tmp_dir = Path(tempfile.mkdtemp(prefix="mp3yt-"))
-                self.logLine.emit(f"Downloading from YouTube to {tmp_dir} ...")
-                from mp3yt.core.ytdownload import download_as_mp3
+            self.logLine.emit(f"Downloading from YouTube to {tmp_dir} ...")
+            from slicer.core.ytdownload import download_as_mp3
 
-                def _ydl_progress(frac: float, msg: str) -> None:
-                    # Map yt-dlp progress to the first ~15% of the overall bar.
-                    self.progressChanged.emit(min(frac * 0.15, 0.15), msg)
+            def _ydl_progress(frac: float, msg: str) -> None:
+                # Map yt-dlp progress to the first ~15% of the overall bar.
+                self.progressChanged.emit(min(frac * 0.15, 0.15), msg)
 
-                result = download_as_mp3(
-                    job.source_value, tmp_dir, on_progress=_ydl_progress
-                )
-                source_mp3 = result.path
-                self.logLine.emit(
-                    f"Downloaded: {result.title} ({result.duration:.0f}s)"
-                )
-            else:
-                source_mp3 = Path(job.source_value).expanduser().resolve()
-                if not source_mp3.is_file():
-                    self.finished.emit(False, f"Source file not found: {source_mp3}")
-                    return
+            result = download_as_mp3(
+                job.youtube_url, tmp_dir, on_progress=_ydl_progress
+            )
+            source_mp3 = result.path
+            self.logLine.emit(
+                f"Downloaded: {result.title} ({result.duration:.0f}s)"
+            )
 
             self._cut_all(tracks, source_mp3, bins)
 
@@ -146,8 +132,7 @@ class PipelineWorker(QObject):
             self.finished.emit(False, f"Error: {exc}")
             return
         finally:
-            if tmp_dir is not None:
-                shutil.rmtree(tmp_dir, ignore_errors=True)
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     # ---- cutting ---------------------------------------------------------
 

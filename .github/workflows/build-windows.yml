@@ -2,7 +2,8 @@ name: Build Windows
 
 # Triggers:
 #   * Manual run from the Actions tab ("Run workflow")
-#   * Called from the `Build All` orchestrator (release.yml) on tag push
+#   * Called from the `Build All` orchestrator (build-all.yml) when a
+#     GitHub Release is published
 on:
   workflow_dispatch:
   workflow_call:
@@ -26,7 +27,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install -e .
           python -m pip install pyinstaller
 
       - name: Download ffmpeg (BtbN LGPL win64)
@@ -46,15 +46,15 @@ jobs:
           Remove-Item -Recurse -Force $extract
 
       - name: Run PyInstaller
-        run: python -m PyInstaller --noconfirm --clean --workpath build/build --distpath dist build/mp3-yt-cutter.spec
+        run: python -m PyInstaller --noconfirm --clean --workpath build/build --distpath dist build/yt2mp3slicer.spec
 
       - name: Verify .exe was produced
         shell: pwsh
         run: |
-          if (-not (Test-Path "dist/mp3-yt-cutter/mp3-yt-cutter.exe")) {
-            throw "Build did not produce dist/mp3-yt-cutter/mp3-yt-cutter.exe"
+          if (-not (Test-Path "dist/yt2mp3slicer/yt2mp3slicer.exe")) {
+            throw "Build did not produce dist/yt2mp3slicer/yt2mp3slicer.exe"
           }
-          Get-ChildItem dist/mp3-yt-cutter | Format-Table Name, Length
+          Get-ChildItem dist/yt2mp3slicer | Format-Table Name, Length
 
       - name: Smoke test (start + quit headless)
         shell: pwsh
@@ -62,7 +62,7 @@ jobs:
         # errors. We force exit via QT_QPA_PLATFORM=minimal and a SIGINT.
         run: |
           $env:QT_QPA_PLATFORM = "minimal"
-          $proc = Start-Process -FilePath "dist/mp3-yt-cutter/mp3-yt-cutter.exe" -PassThru
+          $proc = Start-Process -FilePath "dist/yt2mp3slicer/yt2mp3slicer.exe" -PassThru
           Start-Sleep -Seconds 5
           if ($proc.HasExited) {
             throw "App exited prematurely with code $($proc.ExitCode)"
@@ -72,11 +72,11 @@ jobs:
 
       - name: Zip distribution folder
         shell: pwsh
-        run: Compress-Archive -Path "dist/mp3-yt-cutter/*" -DestinationPath "dist/mp3-yt-cutter-windows.zip"
+        run: Compress-Archive -Path "dist/yt2mp3slicer/*" -DestinationPath "dist/yt2mp3slicer-windows.zip"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mp3-yt-cutter-windows
-          path: dist/mp3-yt-cutter-windows.zip
+          name: yt2mp3slicer-windows
+          path: dist/yt2mp3slicer-windows.zip
           if-no-files-found: error

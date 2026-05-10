@@ -1,12 +1,11 @@
-# mp3-yt-cutter
+# yt2mp3slicer
 
-A small cross-platform desktop app that splits a long MP3 (or a YouTube
-video) into individually-tagged tracks based on a `mm:ss Title` tracklist.
-Runs on **Windows**, **macOS**, and **Linux**.
+A small cross-platform desktop app that downloads a YouTube video and
+splits its audio into individually-tagged MP3 tracks based on a
+`mm:ss Title` tracklist. Runs on **Windows**, **macOS**, and **Linux**.
 
-- Two source modes: a **local MP3 file**, or a **YouTube URL** (downloads via `yt-dlp`).
-- **Auto-detects** the tracklist from a YouTube video's chapters or description.
-- **Lossless** cutting via `ffmpeg -c copy` — frame-accurate, near-instant.
+- Downloads via `yt-dlp` and cuts the audio losslessly (`ffmpeg -c copy`).
+- **Auto-detects** the tracklist from the video's chapters or description.
 - Writes ID3v2 tags (title, artist, album, track number) automatically.
 
 ## Install
@@ -17,18 +16,18 @@ bundled, nothing else to install.
 
 | Platform | File                                  | First-launch notes                                                              |
 |----------|---------------------------------------|---------------------------------------------------------------------------------|
-| Windows  | `mp3-yt-cutter-windows.zip`           | Unzip and double-click `mp3-yt-cutter.exe`.                                     |
-| macOS    | `mp3-yt-cutter-macos-arm64.zip`       | Unzip the `.app`. The bundle is **unsigned**, so on first launch right-click → *Open*. |
-| Linux    | `mp3-yt-cutter-linux-x86_64.tar.gz`   | Untar and run `./mp3-yt-cutter`.                                                |
+| Windows  | `yt2mp3slicer-windows.zip`           | Unzip and double-click `yt2mp3slicer.exe`.                                     |
+| macOS    | `yt2mp3slicer-macos-arm64.zip`       | Unzip the `.app`. The bundle is **unsigned**, so on first launch right-click → *Open*. |
+| Linux    | `yt2mp3slicer-linux-x86_64.tar.gz`   | Untar and run `./yt2mp3slicer`.                                                |
 
 ## Use
 
-1. Pick a source: **Local MP3 file** or **YouTube URL**.
-   - On the YouTube tab, click *Fetch info from URL* to auto-fill the album,
-     artist, and tracklist from the video's chapters or description.
-2. Confirm/edit the album, artist, and tracklist.
-3. Pick an output folder.
-4. Click **Cut into tracks**.
+1. Paste a YouTube URL.
+2. Click *Fetch info from URL* to auto-fill the album, artist, and tracklist
+   from the video's chapters or description.
+3. Confirm/edit the album, artist, and tracklist.
+4. Pick an output folder.
+5. Click **Cut into tracks**.
 
 ### Tracklist format
 
@@ -58,8 +57,8 @@ Requires Python 3.10+ and `ffmpeg` on `PATH` (`brew install ffmpeg`,
 One-time setup:
 
 ```bash
-git clone <repo> mp3-yt-cutter
-cd mp3-yt-cutter
+git clone <repo> yt2mp3slicer
+cd yt2mp3slicer
 
 python -m venv .venv
 source .venv/bin/activate           # Linux / macOS / WSL
@@ -67,7 +66,6 @@ source .venv/bin/activate           # Linux / macOS / WSL
 
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install -e .
 pip install pytest                  # for `make test`
 ```
 
@@ -95,8 +93,8 @@ Tags and releases are managed from GitHub itself — no `git tag` /
 
 Publishing fires `.github/workflows/build-all.yml`, which builds Windows,
 Linux, and macOS in parallel and uploads
-`mp3-yt-cutter-windows.zip`, `mp3-yt-cutter-linux-x86_64.tar.gz`, and
-`mp3-yt-cutter-macos-arm64.zip` to that release. The release page will
+`yt2mp3slicer-windows.zip`, `yt2mp3slicer-linux-x86_64.tar.gz`, and
+`yt2mp3slicer-macos-arm64.zip` to that release. The release page will
 show the binaries a few minutes after publish.
 
 To dry-run the builds without cutting a release, run *Build All* manually

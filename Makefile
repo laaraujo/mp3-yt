@@ -1,4 +1,4 @@
-# Cross-platform convenience Makefile for mp3-yt-cutter.
+# Cross-platform convenience Makefile for yt2mp3slicer.
 #
 # Targets:
 #   make                Show this help (default)
@@ -39,7 +39,7 @@ endif
 .PHONY: help test run build build-linux build-macos build-windows
 
 help:
-	@echo "mp3-yt-cutter (host detected: $(HOST_OS))"
+	@echo "yt2mp3slicer (host detected: $(HOST_OS))"
 	@echo
 	@echo "Targets:"
 	@echo "  make test           Run pytest against tests/"
