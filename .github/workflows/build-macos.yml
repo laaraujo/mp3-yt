@@ -6,10 +6,22 @@ on:
 
 jobs:
   build:
-    name: Build macOS .app (unsigned)
-    # macos-latest is currently Apple Silicon (arm64). The produced .app is
-    # arm64-only -- Intel users would need a separate matrix entry on macos-13.
-    runs-on: macos-latest
+    name: Build macOS .app (${{ matrix.arch }}, unsigned)
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      # Don't cancel the arm64 job if x86_64 fails (or vice versa) -- we want
+      # to know if just one architecture is broken.
+      fail-fast: false
+      matrix:
+        include:
+          # Apple Silicon. macos-latest currently points at macos-14 (arm64).
+          - arch: arm64
+            runner: macos-latest
+          # Intel. macos-13 is the last hosted x86_64 runner image GitHub
+          # provides; macos-14+ are Apple Silicon only.
+          - arch: x86_64
+            runner: macos-13
 
     steps:
       - name: Checkout
@@ -21,6 +33,20 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      - name: Sanity-check runner architecture
+        # Catch silently-mismatched runner images early -- if Apple Silicon
+        # ever lands on macos-13, or Intel comes back to macos-latest, the
+        # produced binary would be the wrong arch and we'd only notice when
+        # users tried to run it.
+        run: |
+          ACTUAL="$(uname -m)"
+          EXPECTED="${{ matrix.arch }}"
+          echo "Runner reports arch: $ACTUAL (expected: $EXPECTED)"
+          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "::error::Runner arch ($ACTUAL) does not match matrix arch ($EXPECTED)"
+            exit 1
+          fi
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
@@ -28,9 +54,10 @@ jobs:
           python -m pip install pyinstaller
 
       - name: Install ffmpeg via Homebrew
-        # macos-latest has Homebrew preinstalled; ffmpeg is sometimes already
-        # cached in the runner image. PyInstaller will follow the dylib
-        # dependencies and bundle them into the .app's Frameworks folder.
+        # Both runner images have Homebrew preinstalled. PyInstaller will
+        # follow the dylib dependencies and bundle them into the .app's
+        # Frameworks folder. Brew installs a binary native to the runner's
+        # arch, so x86_64 runner -> x86_64 ffmpeg, arm64 runner -> arm64.
         run: |
           brew update --quiet
           brew install ffmpeg
@@ -47,6 +74,7 @@ jobs:
         run: |
           test -d dist/yt2mp3slicer.app || { echo "Missing dist/yt2mp3slicer.app"; exit 1; }
           ls -la dist/yt2mp3slicer.app/Contents/MacOS/
+          file dist/yt2mp3slicer.app/Contents/MacOS/yt2mp3slicer
 
       - name: Smoke test (launch + quit)
         env:
@@ -68,12 +96,13 @@ jobs:
         # `ditto` preserves the macOS bundle structure (resource forks,
         # symlinks in Frameworks/) where `zip` and Compress-Archive can break it.
         run: |
-          ARCH="$(uname -m)"
-          ditto -c -k --sequesterRsrc --keepParent dist/yt2mp3slicer.app "dist/yt2mp3slicer-macos-${ARCH}.zip"
+          ditto -c -k --sequesterRsrc --keepParent dist/yt2mp3slicer.app "dist/yt2mp3slicer-macos-${{ matrix.arch }}.zip"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: yt2mp3slicer-macos
-          path: dist/yt2mp3slicer-macos-*.zip
+          # Artifact names must be unique across matrix jobs -- v4 no longer
+          # merges same-named artifacts the way v3 did.
+          name: yt2mp3slicer-macos-${{ matrix.arch }}
+          path: dist/yt2mp3slicer-macos-${{ matrix.arch }}.zip
           if-no-files-found: error
