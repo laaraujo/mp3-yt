@@ -23,11 +23,9 @@ from pathlib import Path
 # spec file (``<repo>/build``). We resolve everything relative to the repo root.
 ROOT = Path(SPECPATH).parent
 
-datas = [
-    # Stylesheet must live next to the package so importlib.resources finds it.
-    #(str(ROOT / "slicer" / "ui" / "styles.qss"), "slicer/ui"),
-    (str(ROOT / "slicer" / "ui" ), "slicer/ui"),
-]
+# No extra data files to bundle right now -- everything PyInstaller needs
+# is plain Python under ``slicer/`` and gets picked up automatically.
+datas = []
 
 binaries = []
 ffmpeg_dir = ROOT / "build" / "ffmpeg-bin"

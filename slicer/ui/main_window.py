@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from importlib import resources
 from pathlib import Path
 from typing import Literal
 
@@ -34,8 +33,7 @@ from slicer.core.tracklist import format_tracks
 from slicer.core.youtube_url import is_shorts_url, youtube_video_id
 from slicer.workers import CutJob, MetadataWorker, PipelineWorker
 
-# Severity → foreground color for the Messages list. Tuned to read against
-# the dark panel background defined in styles.qss.
+# Severity → foreground color for the Messages list.
 MessageKind = Literal["info", "success", "warning", "error"]
 _MESSAGE_COLORS: dict[str, QColor] = {
     "info":    QColor("#c5c9da"),
@@ -73,7 +71,7 @@ class MainWindow(QMainWindow):
         # non-live ``_append_message`` so the live line never overwrites
         # phase headers, log entries or per-track outcomes.
         self._live_message_item: QListWidgetItem | None = None
-        # Video titles we've seen from a successful "Fetch info from URL",
+        # Video titles we've seen from a successful "Fetch info",
         # keyed by the URL string. Used to decorate the "Starting cut job
         # for …" message so the user has a friendly identifier instead of a
         # raw URL. Falls back to the URL when we haven't fetched.
@@ -92,7 +90,7 @@ class MainWindow(QMainWindow):
     # ---- UI construction -------------------------------------------------
 
     def _build_ui(self) -> None:
-        central = QWidget(objectName="centralWidget")
+        central = QWidget()
         root = QVBoxLayout(central)
         root.setContentsMargins(20, 18, 20, 18)
         root.setSpacing(14)
@@ -100,11 +98,10 @@ class MainWindow(QMainWindow):
         # Header
         header = QVBoxLayout()
         header.setSpacing(2)
-        title = QLabel("YouTube → MP3 Slicer", objectName="titleLabel")
+        title = QLabel("YouTube → MP3 Slicer")
         subtitle = QLabel(
             "Split a YouTube video into individually-tagged MP3 tracks "
             "from a pasted tracklist.",
-            objectName="subtitleLabel",
         )
         subtitle.setWordWrap(True)
         header.addWidget(title)
@@ -155,7 +152,7 @@ class MainWindow(QMainWindow):
 
         # Action row
         actions = QHBoxLayout()
-        self.cut_button = QPushButton("Cut and download", objectName="primaryButton")
+        self.cut_button = QPushButton("Cut and download")
         self.cut_button.clicked.connect(self._on_cut_clicked)
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.setEnabled(False)
@@ -200,7 +197,7 @@ class MainWindow(QMainWindow):
         # Re-validate on every keystroke so the rest of the form follows
         # along — fields stay disabled until a recognisable video URL is in.
         self.yt_url_edit.textChanged.connect(self._on_url_changed)
-        self.yt_fetch_button = QPushButton("Fetch info from URL")
+        self.yt_fetch_button = QPushButton("Fetch info")
         self.yt_fetch_button.setToolTip(
             "Read the video's chapters / description and auto-fill the album, "
             "artist and tracklist below."
@@ -221,24 +218,23 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.url_error_label)
 
         hint = QLabel(
-            "Paste a YouTube URL, then click <b>Fetch info from URL</b> to "
-            "auto-detect the tracklist from the video's chapters, description "
-            "or top comments. The full audio is only downloaded when you "
-            "press <b>Cut and download</b>."
+            "<ol style='margin: 0; padding-left: 20px;'>"
+            "<li>Paste a YouTube URL above.</li>"
+            "<li>Click <b>Fetch info</b> to auto-detect the "
+            "tracklist from the video's chapters, description, or top comments.</li>"
+            "<li>Press <b>Cut and download</b> to fetch the full audio and "
+            "save the tagged tracks.</li>"
+            "</ol>"
         )
         hint.setWordWrap(True)
-        hint.setObjectName("subtitleLabel")
+        hint.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(hint)
 
         return box
 
     @staticmethod
     def _field_label(text: str) -> QLabel:
-        # The "class" property pairs with the `QLabel.fieldLabel` selector in
-        # styles.qss to give field labels a slightly muted, semi-bold look.
-        lbl = QLabel(text)
-        lbl.setProperty("class", "fieldLabel")
-        return lbl
+        return QLabel(text)
 
     # ---- file/folder pickers --------------------------------------------
 
@@ -592,7 +588,7 @@ class MainWindow(QMainWindow):
         # Fetching needs a valid URL and idle workers.
         self.yt_fetch_button.setEnabled(self._url_is_valid and not busy)
         self.yt_fetch_button.setText(
-            "Fetching…" if fetching else "Fetch info from URL"
+            "Fetching…" if fetching else "Fetch info"
         )
 
         # Everything downstream of the URL is gated behind a valid URL too.
@@ -626,23 +622,11 @@ class MainWindow(QMainWindow):
 # --- entry point ---------------------------------------------------------
 
 
-def _load_stylesheet() -> str:
-    try:
-        # return resources.files("slicer.ui").joinpath("styles.qss").read_text(encoding="utf-8")
-        return resources.files("slicer.ui").read_text(encoding="utf-8")
-    except (FileNotFoundError, ModuleNotFoundError, OSError):
-        return ""
-
-
 def run_app(argv: list[str]) -> int:
     app = QApplication(argv)
     app.setApplicationName("yt2mp3slicer")
     app.setApplicationDisplayName("YouTube → MP3 Slicer")
     app.setOrganizationName("yt2mp3slicer")
-
-    qss = _load_stylesheet()
-    if qss:
-        app.setStyleSheet(qss)
 
     # No bundled icon yet; the OS falls back to a generic window icon.
     icon = QIcon.fromTheme("multimedia-audio-player")

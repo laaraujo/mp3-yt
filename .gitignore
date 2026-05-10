@@ -5,11 +5,16 @@ __pycache__/
 *.egg-info/
 .eggs/
 
-# Virtualenvs
+# Virtualenvs (uv creates and manages .venv)
 .venv/
 venv/
 env/
-.venv-build/
+
+# uv
+# uv.lock IS committed -- it pins exact versions for reproducible builds
+# and CI. Local caches and the workspace-local installer dir are not.
+.uv-install/
+.uv-cache/
 
 # IDE / OS
 .vscode/

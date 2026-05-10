@@ -1,0 +1,63 @@
+# yt2mp3slicer — managed with uv (https://docs.astral.sh/uv/).
+#
+# Quick start (after installing uv: https://docs.astral.sh/uv/getting-started/installation/):
+#
+#   uv sync                       # create .venv with locked runtime + dev deps
+#   uv run python -m slicer       # launch the app
+#   uv run pytest                 # run the test suite
+#
+# Build/packaging deps (PyInstaller) live in their own dependency group and
+# are pulled in only by the per-platform build scripts via:
+#
+#   uv sync --group build
+
+[project]
+name = "yt2mp3slicer"
+version = "0.1.0"
+description = "Download a long YouTube video and slice it into individually-tagged MP3 tracks."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "Lautaro Araujo" }]
+keywords = ["youtube", "mp3", "audio", "slicer", "yt-dlp", "ffmpeg"]
+classifiers = [
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio",
+]
+dependencies = [
+    "PySide6>=6.7,<7",
+    "mutagen>=1.47,<2",
+    "yt-dlp>=2024.8.6",
+]
+
+# PEP 735 dependency groups. ``dev`` is installed by default with
+# ``uv sync``; opt out with ``--no-dev`` or pick a specific group with
+# ``--group build``.
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+build = [
+    "pyinstaller>=6.10",
+]
+
+[tool.uv]
+# This is an application, not a library. Skip building/installing the
+# project itself — `slicer/` is just imported from the repo root, the same
+# way PyInstaller picks it up. Avoids needing a build backend for a
+# distributable wheel we don't actually publish.
+package = false
+
+[tool.pytest.ini_options]
+# Because the project isn't installed into the venv (see ``tool.uv``),
+# the ``slicer`` package sits in the repo root and needs to be on
+# ``sys.path`` for ``from slicer.core import ...`` to resolve when pytest
+# is launched as a console script (``uv run pytest``).
+pythonpath = ["."]
+testpaths = ["tests"]

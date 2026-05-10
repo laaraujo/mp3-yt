@@ -1,10 +1,19 @@
 @echo off
-REM Launch yt2mp3slicer using whichever `python` is on PATH.
+REM Launch yt2mp3slicer via uv (https://docs.astral.sh/uv/).
 REM
-REM Assumes the project virtualenv is already active (so `python` resolves
-REM to the venv interpreter with PySide6/yt-dlp/mutagen installed). See the
-REM "Setup" section of the README for one-time environment setup.
+REM `uv run` creates/refreshes .venv from uv.lock on demand, so this
+REM works from a clean clone with no manual venv activation. The only
+REM prerequisite is having `uv` on PATH; see the README's "Develop"
+REM section for installation instructions.
 
 setlocal
 cd /d "%~dp0\.."
-python -m slicer %*
+
+where uv >nul 2>nul
+if errorlevel 1 (
+    echo error: 'uv' not found on PATH. 1>&2
+    echo Install it from https://docs.astral.sh/uv/getting-started/installation/ 1>&2
+    exit /b 127
+)
+
+uv run python -m slicer %*

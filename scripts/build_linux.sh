@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Build a self-contained Linux binary of yt2mp3slicer using PyInstaller.
 #
-# Sets up a build venv (.venv-build), installs runtime + build dependencies,
-# downloads a static ffmpeg/ffprobe build from BtbN/FFmpeg-Builds (LGPL),
+# Uses uv (https://docs.astral.sh/uv/) to set up the build environment
+# from `uv.lock` plus the `build` dependency group (PyInstaller).
+# Downloads a static ffmpeg/ffprobe build from BtbN/FFmpeg-Builds (LGPL),
 # runs PyInstaller against build/yt2mp3slicer.spec, and produces a
 # distributable tarball.
 #
 # Output:
-#   dist/yt2mp3slicer/yt2mp3slicer           the launcher binary
+#   dist/yt2mp3slicer/yt2mp3slicer            the launcher binary
 #   dist/yt2mp3slicer-linux-<arch>.tar.gz     shareable archive
 #
 # Usage:
@@ -26,23 +27,22 @@ case "${1:-}" in
   *) echo "Unknown argument: $1" >&2; exit 2 ;;
 esac
 
+if ! command -v uv >/dev/null 2>&1; then
+  echo "error: 'uv' not found on PATH." >&2
+  echo "Install it from https://docs.astral.sh/uv/getting-started/installation/" >&2
+  exit 127
+fi
+
 if [[ "$CLEAN" -eq 1 ]]; then
   echo "Cleaning previous build artifacts..."
-  rm -rf dist build/build build/ffmpeg-bin build/ffmpeg-extracted build/ffmpeg.tar.xz .venv-build
+  rm -rf dist build/build build/ffmpeg-bin build/ffmpeg-extracted build/ffmpeg.tar.xz .venv
 fi
 
-# 1. Build venv ----------------------------------------------------------
-VENV=".venv-build"
-PY="$VENV/bin/python"
-
-if [[ ! -x "$PY" ]]; then
-  echo "Creating build virtualenv in $VENV ..."
-  python3 -m venv "$VENV"
-fi
-
-"$PY" -m pip install --upgrade pip >/dev/null
-"$PY" -m pip install -r requirements.txt
-"$PY" -m pip install pyinstaller
+# 1. Sync the project venv with runtime + build deps (PyInstaller). The
+#    same `.venv` is reused for `uv run pytest` etc; the extra build group
+#    just adds PyInstaller on top.
+echo "Syncing build environment with uv..."
+uv sync --group build
 
 # 2. Download static ffmpeg/ffprobe --------------------------------------
 FFMPEG_DIR="build/ffmpeg-bin"
@@ -93,7 +93,7 @@ fi
 
 # 3. PyInstaller ---------------------------------------------------------
 echo "Running PyInstaller..."
-"$PY" -m PyInstaller --noconfirm --clean \
+uv run pyinstaller --noconfirm --clean \
   --workpath build/build \
   --distpath dist \
   build/yt2mp3slicer.spec

@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
-# Launch yt2mp3slicer using whichever `python` is on PATH.
+# Launch yt2mp3slicer via uv (https://docs.astral.sh/uv/).
 #
-# Assumes the project virtualenv is already active (so `python` resolves to
-# the venv interpreter with PySide6/yt-dlp/mutagen installed). See the
-# "Setup" section of the README for one-time environment setup.
+# `uv run` will create/refresh `.venv` from `uv.lock` if needed, so this
+# works from a clean clone with no manual venv activation. The only
+# prerequisite is having `uv` on PATH; see the README's "Develop" section
+# for installation instructions.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
-exec python -m slicer "$@"
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "error: 'uv' not found on PATH." >&2
+  echo "Install it from https://docs.astral.sh/uv/getting-started/installation/" >&2
+  exit 127
+fi
+
+exec uv run python -m slicer "$@"

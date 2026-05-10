@@ -31,7 +31,7 @@ bundled, nothing else to install.
 ## Use
 
 1. Paste a YouTube URL.
-2. Click *Fetch info from URL* to auto-fill the album, artist, and tracklist
+2. Click *Fetch info* to auto-fill the album, artist, and tracklist
    from the video's chapters, description, or top comments.
 3. Confirm/edit the album, artist, and tracklist.
 4. Pick an output folder.
@@ -61,35 +61,40 @@ albums tidy when you reuse the same output folder.
 
 ## Develop
 
-Requires Python 3.10+ and `ffmpeg` on `PATH` (`brew install ffmpeg`,
-`sudo apt install ffmpeg`, or `winget install Gyan.FFmpeg`).
+Project setup is managed by [**uv**](https://docs.astral.sh/uv/) — a
+single fast tool that handles the Python interpreter, the virtualenv,
+and locked dependencies. You also need `ffmpeg` on `PATH` for local runs
+(`brew install ffmpeg`, `sudo apt install ffmpeg`, or
+`winget install Gyan.FFmpeg`); the bundled releases ship their own copy.
 
 One-time setup:
 
 ```bash
+# 1. Install uv (skip if you already have it).
+curl -LsSf https://astral.sh/uv/install.sh | sh        # Linux / macOS / WSL
+# powershell -c "irm https://astral.sh/uv/install.ps1 | iex"   # Windows
+# (or: brew install uv, winget install astral-sh.uv, etc.)
+
+# 2. Clone and install pinned deps.
 git clone <repo> yt2mp3slicer
 cd yt2mp3slicer
-
-python -m venv .venv
-source .venv/bin/activate           # Linux / macOS / WSL
-# .venv\Scripts\Activate.ps1        # Windows PowerShell
-
-pip install --upgrade pip
-pip install -r requirements.txt
-pip install pytest                  # for `make test`
+uv sync           # creates .venv from uv.lock (Python + runtime + dev deps)
 ```
 
-Then, with the venv active:
+Day-to-day:
 
 ```bash
-make            # list targets
-make run        # launch the app
-make test       # run the test suite
-make build      # build a self-contained bundle for your current OS
+make             # list targets
+make run         # launch the app  (uv run python -m slicer)
+make test        # run the test suite  (uv run pytest -q)
+make build       # build a self-contained bundle for your current OS
 ```
 
-The Makefile and `scripts/run.{sh,bat}` assume the venv is already
-active — they don't manage it for you.
+`uv run` (and the `make` targets that wrap it) automatically
+creates/refreshes `.venv` from `uv.lock`, so there's no virtualenv to
+activate manually. Adding or upgrading a dependency is a single
+`uv add <pkg>` (or `uv add --group dev <pkg>` for tooling); commit the
+updated `pyproject.toml` and `uv.lock` together.
 
 ### Releases
 

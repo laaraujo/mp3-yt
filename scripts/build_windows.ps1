@@ -3,8 +3,9 @@
     Build a self-contained Windows .exe of yt2mp3slicer using PyInstaller.
 
 .DESCRIPTION
-    Sets up a venv (in `.venv-build`), installs runtime + build dependencies,
-    downloads a static ffmpeg/ffprobe build from BtbN/FFmpeg-Builds (LGPL),
+    Uses uv (https://docs.astral.sh/uv/) to set up the build environment
+    from `uv.lock` plus the `build` dependency group (PyInstaller).
+    Downloads a static ffmpeg/ffprobe build from BtbN/FFmpeg-Builds (LGPL),
     runs PyInstaller against `build/yt2mp3slicer.spec`, and zips the result.
 
     Output:
@@ -12,16 +13,16 @@
         dist/yt2mp3slicer-windows.zip               <- shareable zip of the folder
 
 .PARAMETER Clean
-    Remove `dist/`, `build/build/`, `build/ffmpeg-bin/` and the build venv before
-    building, forcing a from-scratch rebuild.
+    Remove `dist/`, `build/build/`, `build/ffmpeg-bin/` and the project `.venv`
+    before building, forcing a from-scratch rebuild.
 
 .EXAMPLE
-    PS> .\build\build_windows.ps1
-    PS> .\build\build_windows.ps1 -Clean
+    PS> .\scripts\build_windows.ps1
+    PS> .\scripts\build_windows.ps1 -Clean
 
 .NOTES
     Run this from PowerShell on **Windows**, not from inside WSL.
-    Requires Python 3.10+ on PATH.
+    Requires `uv` on PATH (https://docs.astral.sh/uv/getting-started/installation/).
 #>
 
 [CmdletBinding()]
@@ -36,25 +37,22 @@ $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RepoRoot
 Write-Host "Repo root: $RepoRoot"
 
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    Write-Error "'uv' was not found on PATH. Install it from https://docs.astral.sh/uv/getting-started/installation/"
+    exit 127
+}
+
 if ($Clean) {
     Write-Host "Cleaning previous build artifacts..."
-    foreach ($p in @("dist", "build/build", "build/ffmpeg-bin", ".venv-build")) {
+    foreach ($p in @("dist", "build/build", "build/ffmpeg-bin", ".venv")) {
         if (Test-Path $p) { Remove-Item -Recurse -Force $p }
     }
 }
 
-# 1. Build venv ------------------------------------------------------------
-$VenvDir = ".venv-build"
-$Python = Join-Path $VenvDir "Scripts/python.exe"
-
-if (-not (Test-Path $Python)) {
-    Write-Host "Creating build virtualenv in $VenvDir ..."
-    python -m venv $VenvDir
-}
-
-& $Python -m pip install --upgrade pip | Out-Null
-& $Python -m pip install -r requirements.txt
-& $Python -m pip install pyinstaller
+# 1. Sync the project venv with runtime + build deps (PyInstaller). -------
+Write-Host "Syncing build environment with uv..."
+& uv sync --group build
+if ($LASTEXITCODE -ne 0) { throw "uv sync failed with exit code $LASTEXITCODE" }
 
 # 2. Download static ffmpeg/ffprobe ---------------------------------------
 $FfmpegBinDir = "build/ffmpeg-bin"
@@ -99,7 +97,7 @@ if ($NeedFfmpegDownload) {
 
 # 3. PyInstaller ----------------------------------------------------------
 Write-Host "Running PyInstaller..."
-& $Python -m PyInstaller --noconfirm --clean `
+& uv run pyinstaller --noconfirm --clean `
     --workpath build/build `
     --distpath dist `
     build/yt2mp3slicer.spec

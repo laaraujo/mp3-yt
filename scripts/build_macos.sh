@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Build a self-contained macOS .app of yt2mp3slicer using PyInstaller.
 #
+# Uses uv (https://docs.astral.sh/uv/) to set up the build environment
+# from `uv.lock` plus the `build` dependency group (PyInstaller).
+#
 # Outputs:
-#   dist/yt2mp3slicer/yt2mp3slicer           the raw launcher (folder mode)
+#   dist/yt2mp3slicer/yt2mp3slicer            the raw launcher (folder mode)
 #   dist/yt2mp3slicer.app                     the macOS .app bundle
 #   dist/yt2mp3slicer-macos-<arch>.zip        shareable zip of the .app
 #
@@ -30,11 +33,6 @@ case "${1:-}" in
   *) echo "Unknown argument: $1" >&2; exit 2 ;;
 esac
 
-if [[ "$CLEAN" -eq 1 ]]; then
-  echo "Cleaning previous build artifacts..."
-  rm -rf dist build/build build/ffmpeg-bin .venv-build
-fi
-
 # 1. Sanity checks -------------------------------------------------------
 if [[ "$(uname)" != "Darwin" ]]; then
   echo "build_macos.sh must be run on macOS." >&2
@@ -46,18 +44,20 @@ if ! command -v brew >/dev/null 2>&1; then
   exit 1
 fi
 
-# 2. Build venv ----------------------------------------------------------
-VENV=".venv-build"
-PY="$VENV/bin/python"
-
-if [[ ! -x "$PY" ]]; then
-  echo "Creating build virtualenv in $VENV ..."
-  python3 -m venv "$VENV"
+if ! command -v uv >/dev/null 2>&1; then
+  echo "error: 'uv' not found on PATH." >&2
+  echo "Install it from https://docs.astral.sh/uv/getting-started/installation/" >&2
+  exit 127
 fi
 
-"$PY" -m pip install --upgrade pip >/dev/null
-"$PY" -m pip install -r requirements.txt
-"$PY" -m pip install pyinstaller
+if [[ "$CLEAN" -eq 1 ]]; then
+  echo "Cleaning previous build artifacts..."
+  rm -rf dist build/build build/ffmpeg-bin .venv
+fi
+
+# 2. Sync the project venv with runtime + build deps (PyInstaller).
+echo "Syncing build environment with uv..."
+uv sync --group build
 
 # 3. Pull ffmpeg/ffprobe from Homebrew ----------------------------------
 FFMPEG_DIR="build/ffmpeg-bin"
@@ -83,7 +83,7 @@ fi
 
 # 4. PyInstaller ---------------------------------------------------------
 echo "Running PyInstaller..."
-"$PY" -m PyInstaller --noconfirm --clean \
+uv run pyinstaller --noconfirm --clean \
   --workpath build/build \
   --distpath dist \
   build/yt2mp3slicer.spec
