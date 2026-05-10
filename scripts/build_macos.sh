@@ -85,6 +85,16 @@ if [[ ! -d "$APP" ]]; then
 fi
 
 echo "Verifying bundled ffmpeg tools..."
+lib_paths=(
+  "$APP/Contents/MacOS"
+  "$APP/Contents/MacOS/_internal"
+  "$APP/Contents/Frameworks"
+)
+for lib_path in "${lib_paths[@]}"; do
+  if [[ -d "$lib_path" ]]; then
+    export DYLD_LIBRARY_PATH="$lib_path${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+  fi
+done
 for tool in ffmpeg ffprobe; do
   tool_path="$(find "$APP" -type f -name "$tool" -perm -111 | head -n1)"
   if [[ -z "$tool_path" ]]; then

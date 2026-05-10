@@ -102,6 +102,8 @@ class PipelineWorker(QObject):
         # Validate ffmpeg up-front so we fail fast with a clear message.
         try:
             bins = ffmpeg.find_binaries()
+            ffmpeg_dir = Path(bins.ffmpeg).parent
+            ffmpeg.configure_subprocess_environment(ffmpeg_dir)
             ffmpeg.ensure_binaries_runnable(bins)
         except ffmpeg.FfmpegNotFoundError as exc:
             self.finished.emit(False, str(exc))
@@ -126,8 +128,6 @@ class PipelineWorker(QObject):
 
             # Point yt-dlp at the same ffmpeg the cutter uses; otherwise it
             # falls back to PATH and fails inside frozen bundles.
-            ffmpeg_dir = Path(bins.ffmpeg).parent
-            ffmpeg.prepend_to_path(ffmpeg_dir)
             result = download_as_mp3(
                 job.youtube_url,
                 tmp_dir,

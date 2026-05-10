@@ -14,6 +14,7 @@ from slicer.core.ffmpeg import (
     FfmpegBinaries,
     FfmpegNotFoundError,
     _subprocess_startup_kwargs,
+    configure_subprocess_environment,
     ensure_binaries_runnable,
     find_binaries,
     prepend_to_path,
@@ -79,6 +80,30 @@ def test_prepend_to_path_adds_directory_once(monkeypatch, tmp_path):
     assert os.environ["PATH"] == f"{tmp_path}{os.pathsep}/usr/bin"
 
 
+def test_configure_subprocess_environment_adds_macos_bundle_library_paths(monkeypatch, tmp_path):
+    exe_dir = tmp_path / "Contents" / "MacOS"
+    frameworks_dir = tmp_path / "Contents" / "Frameworks"
+    meipass_dir = tmp_path / "Contents" / "MacOS" / "_internal"
+    tool_dir = meipass_dir / "bin"
+    for directory in (exe_dir, frameworks_dir, meipass_dir, tool_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(meipass_dir), raising=False)
+    monkeypatch.setattr(sys, "executable", str(exe_dir / "yt2mp3slicer"))
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.delenv("DYLD_LIBRARY_PATH", raising=False)
+
+    configure_subprocess_environment(tool_dir)
+
+    assert os.environ["PATH"].startswith(f"{tool_dir}{os.pathsep}")
+    dyld_paths = os.environ["DYLD_LIBRARY_PATH"].split(os.pathsep)
+    assert str(meipass_dir) in dyld_paths
+    assert str(exe_dir) in dyld_paths
+    assert str(frameworks_dir) in dyld_paths
+
+
 def test_ensure_binaries_runnable_checks_ffmpeg_and_ffprobe(tmp_path, monkeypatch):
     ffmpeg = tmp_path / "ffmpeg"
     ffprobe = tmp_path / "ffprobe"
@@ -106,4 +131,21 @@ def test_ensure_binaries_runnable_rejects_non_executable(tmp_path):
     ffprobe.write_text("")
 
     with pytest.raises(FfmpegNotFoundError, match="not executable"):
+        ensure_binaries_runnable(FfmpegBinaries(ffmpeg=str(ffmpeg), ffprobe=str(ffprobe)))
+
+
+def test_ensure_binaries_runnable_includes_process_output(tmp_path, monkeypatch):
+    ffmpeg = tmp_path / "ffmpeg"
+    ffprobe = tmp_path / "ffprobe"
+    ffmpeg.write_text("")
+    ffprobe.write_text("")
+    ffmpeg.chmod(0o755)
+    ffprobe.chmod(0o755)
+
+    def fake_run(cmd, **kwargs):
+        raise subprocess.CalledProcessError(134, cmd, stderr="dyld: Library not loaded")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(FfmpegNotFoundError, match="dyld: Library not loaded"):
         ensure_binaries_runnable(FfmpegBinaries(ffmpeg=str(ffmpeg), ffprobe=str(ffprobe)))

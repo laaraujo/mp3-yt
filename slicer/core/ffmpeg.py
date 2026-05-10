@@ -67,6 +67,44 @@ def prepend_to_path(directory: str | Path) -> None:
         os.environ["PATH"] = entry if not existing else f"{entry}{os.pathsep}{existing}"
 
 
+def _prepend_env_path(name: str, directory: str | Path) -> None:
+    entry = str(directory)
+    existing = os.environ.get(name, "")
+    parts = existing.split(os.pathsep) if existing else []
+    if entry not in parts:
+        os.environ[name] = entry if not existing else f"{entry}{os.pathsep}{existing}"
+
+
+def _bundled_library_paths() -> list[Path]:
+    """Library directories needed by bundled helper executables on macOS."""
+    if not getattr(sys, "frozen", False):
+        return []
+
+    paths: list[Path] = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        base = Path(meipass)
+        paths.extend([base, base / "lib"])
+
+    exe_dir = Path(sys.executable).parent
+    paths.extend(
+        [
+            exe_dir,
+            exe_dir / "lib",
+            exe_dir.parent / "Frameworks",
+        ]
+    )
+    return [p for p in paths if p.is_dir()]
+
+
+def configure_subprocess_environment(tool_dir: str | Path) -> None:
+    """Expose bundled tools and their dylibs to child processes."""
+    prepend_to_path(tool_dir)
+    if sys.platform == "darwin":
+        for path in _bundled_library_paths():
+            _prepend_env_path("DYLD_LIBRARY_PATH", path)
+
+
 def _subprocess_startup_kwargs() -> dict:
     """Hide child ffmpeg/ffprobe consoles in Windows GUI builds."""
     if not sys.platform.startswith("win"):
@@ -125,6 +163,16 @@ def _check_runnable(cmd: Sequence[str]) -> None:
     )
 
 
+def _format_run_error(exc: OSError | subprocess.CalledProcessError) -> str:
+    if isinstance(exc, subprocess.CalledProcessError):
+        stderr = (exc.stderr or "").strip()
+        stdout = (exc.stdout or "").strip()
+        details = stderr or stdout
+        if details:
+            return f"{exc}; output: {details}"
+    return str(exc)
+
+
 def ensure_binaries_runnable(bins: FfmpegBinaries) -> None:
     """Fail early if located binaries exist but cannot be executed."""
     for name, path in (("ffmpeg", bins.ffmpeg), ("ffprobe", bins.ffprobe)):
@@ -139,7 +187,9 @@ def ensure_binaries_runnable(bins: FfmpegBinaries) -> None:
         except subprocess.TimeoutExpired as exc:
             raise FfmpegNotFoundError(f"{name} at {binary} did not respond to '-version'.") from exc
         except (OSError, subprocess.CalledProcessError) as exc:
-            raise FfmpegNotFoundError(f"{name} was found at {binary}, but could not be run: {exc}") from exc
+            raise FfmpegNotFoundError(
+                f"{name} was found at {binary}, but could not be run: {_format_run_error(exc)}"
+            ) from exc
 
 
 def probe_duration(path: Path, *, bins: FfmpegBinaries | None = None) -> float:

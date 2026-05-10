@@ -89,6 +89,16 @@ jobs:
       - name: Smoke test bundled ffmpeg
         run: |
           set -euo pipefail
+          lib_paths=(
+            "dist/yt2mp3slicer.app/Contents/MacOS"
+            "dist/yt2mp3slicer.app/Contents/MacOS/_internal"
+            "dist/yt2mp3slicer.app/Contents/Frameworks"
+          )
+          for lib_path in "${lib_paths[@]}"; do
+            if [[ -d "$lib_path" ]]; then
+              export DYLD_LIBRARY_PATH="$lib_path${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+            fi
+          done
           for tool in ffmpeg ffprobe; do
             path="$(find dist/yt2mp3slicer.app -type f -name "$tool" -perm -111 | head -n1)"
             if [[ -z "$path" ]]; then
