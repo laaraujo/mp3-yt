@@ -20,11 +20,12 @@ individually-tagged MP3 tracks based on a `mm:ss Title` tracklist. Runs on
 Grab the latest build for your platform from **Releases**. `ffmpeg` and
 `ffprobe` are bundled — nothing else to install.
 
-| Platform | File                                  | First-launch notes                                                              |
-|----------|---------------------------------------|---------------------------------------------------------------------------------|
-| Windows  | `yt2mp3slicer-windows.zip`           | Unzip and double-click `yt2mp3slicer.exe`.                                     |
-| macOS    | `yt2mp3slicer-macos-arm64.zip`       | Unzip the `.app`. Unsigned, so right-click → *Open* the first time. |
-| Linux    | `yt2mp3slicer-linux-x86_64.tar.gz`   | Untar and run `./yt2mp3slicer`.                                                |
+| Platform            | File                                | First-launch notes                                                              |
+|---------------------|-------------------------------------|---------------------------------------------------------------------------------|
+| Windows             | `yt2mp3slicer-windows.zip`          | Unzip and double-click `yt2mp3slicer.exe`.                                      |
+| macOS Apple Silicon | `yt2mp3slicer-macos-arm64.zip`      | Unzip the `.app`. Unsigned, so right-click -> *Open* the first time. macOS 11+. |
+| macOS Intel         | `yt2mp3slicer-macos-x86_64.zip`     | Unzip the `.app`. Unsigned, so right-click -> *Open* the first time. macOS 11+. |
+| Linux               | `yt2mp3slicer-linux-x86_64.tar.gz`  | Untar and run `./yt2mp3slicer`.                                                 |
 
 ## Use
 
