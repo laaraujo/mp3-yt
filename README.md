@@ -53,6 +53,14 @@ The app creates a subfolder named after the album (e.g. `Echoes of Tomorrow/`)
 and writes `01 - Intro.mp3`, `02 - Sunrise.mp3`, … each tagged with `title`,
 `artist`, `album`, `albumartist`, and `tracknumber: N/Total`.
 
+### Audio quality
+
+Tracks are encoded at **192 kbps CBR MP3**, and the bitrate isn't configurable
+on purpose. YouTube's best audio stream is itself lossy (Opus or AAC, typically
+~128–160 kbps), so re-encoding to 256 or 320 kbps wouldn't recover any
+information the source already discarded — it would only grow the file size.
+192 kbps comfortably preserves what's actually there.
+
 ## Develop
 
 Setup is managed by [**uv**](https://docs.astral.sh/uv/). You also need
