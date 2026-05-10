@@ -66,6 +66,10 @@ class MainWindow(QMainWindow):
         # Cached video titles from successful Fetches, keyed by URL. Used
         # to decorate the "Starting cut job for …" message.
         self._titles_by_url: dict[str, str] = {}
+        # Last URL that successfully populated metadata. A new URL should
+        # replace stale album/artist values; a repeat fetch should not
+        # clobber manual edits for the same video.
+        self._last_metadata_url: str | None = None
         # Whether the URL field currently holds a valid YouTube video URL.
         # Drives the rest of the form via ``_refresh_form_state``.
         self._url_is_valid: bool = False
@@ -330,17 +334,21 @@ class MainWindow(QMainWindow):
         self._meta_thread.start()
 
     def _on_metadata_detected(self, result) -> None:  # DetectionResult
-        # Only fill empty fields so we never clobber what the user typed.
         meta = result.metadata
-        if not self.album_edit.text().strip():
-            self.album_edit.setText(result.guessed_album or meta.title)
-        if not self.artist_edit.text().strip():
-            self.artist_edit.setText(result.guessed_artist or meta.uploader)
+        url_at_fetch = self.yt_url_edit.text().strip()
+        is_new_metadata_url = url_at_fetch != self._last_metadata_url
+
+        album = result.guessed_album or meta.title
+        artist = result.guessed_artist or meta.uploader
+        if album and (is_new_metadata_url or not self.album_edit.text().strip()):
+            self.album_edit.setText(album)
+        if artist and (is_new_metadata_url or not self.artist_edit.text().strip()):
+            self.artist_edit.setText(artist)
 
         # Cache the title for the upcoming "Starting cut job for …" message.
-        url_at_fetch = self.yt_url_edit.text().strip()
         if meta.title and url_at_fetch:
             self._titles_by_url[url_at_fetch] = meta.title
+        self._last_metadata_url = url_at_fetch
 
         if result.tracks:
             tracklist_text = format_tracks(result.tracks)
