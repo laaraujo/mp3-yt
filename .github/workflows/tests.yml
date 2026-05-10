@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel superseded PR runs (a new commit on a PR kills the previous run).
+# Don't cancel main-branch runs — those are the post-merge safety net.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: Pytest (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install ffmpeg
+        # `test_find_binaries_falls_through_when_override_dir_empty`
+        # exercises the PATH fallback and needs a real ffmpeg available.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Sync project venv (runtime + dev deps)
+        # --locked: fail if uv.lock drifted from pyproject.toml so PRs that
+        # forget to commit a re-locked lockfile can't go green.
+        run: uv sync --locked
+
+      - name: Run tests
+        run: uv run pytest -q
