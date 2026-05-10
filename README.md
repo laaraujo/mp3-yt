@@ -13,6 +13,8 @@ individually-tagged MP3 tracks based on a `mm:ss Title` tracklist. Runs on
 - **Auto-detects** the tracklist from chapters, description, or top comments.
 - Writes ID3v2 tags (title, artist, album, track number).
 
+![yt2mp3slicer main window](docs/screenshot.png)
+
 ## Install
 
 Grab the latest build for your platform from **Releases**. `ffmpeg` and
