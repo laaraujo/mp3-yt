@@ -14,12 +14,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macos-latest is currently macos-14 (Apple Silicon).
+          # Apple Silicon. macos-latest currently points at macos-15.
           - arch: arm64
             runner: macos-latest
-          # macos-13 is the last hosted x86_64 runner image.
+          # Intel. `macos-15-intel` replaced the retired `macos-13` label
+          # in Dec 2025. GitHub will keep Intel macOS runners through
+          # Fall 2027, after which no hosted x86_64 macOS runner exists.
           - arch: x86_64
-            runner: macos-13
+            runner: macos-15-intel
 
     steps:
       - name: Checkout
