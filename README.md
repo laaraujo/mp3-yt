@@ -1,6 +1,6 @@
 # yt2mp3slicer
 
-A small cross-platform desktop app that downloads a **long** YouTube
+A small cross-platform desktop app that downloads a YouTube
 video — typically a full-album upload, DJ mix, or OST compilation — and
 splits its audio into individually-tagged MP3 tracks based on a
 `mm:ss Title` tracklist. Runs on **Windows**, **macOS**, and **Linux**.
