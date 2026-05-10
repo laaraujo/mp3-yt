@@ -14,21 +14,17 @@
 # Scoop, or Chocolatey -- not Microsoft `nmake`.
 #
 # Notes:
-#   * `make test` uses the project venv at .venv/. If you haven't set one
-#     up yet, run `make run` once (the launcher creates the venv and
-#     installs runtime deps), then `pip install pytest` into it.
-#   * `make run` works from a fresh clone -- the launcher scripts create
-#     the venv on first invocation.
+#   * `make test` and `make run` both assume the project virtualenv is
+#     already active so `python` resolves to the venv interpreter. See the
+#     "Setup" section of the README for one-time environment setup.
 
 # --- Host OS detection ----------------------------------------------------
 
 ifeq ($(OS),Windows_NT)
     HOST_OS := windows
-    PY      := .venv/Scripts/python.exe
     RUN_CMD := scripts/run.bat
 else
     UNAME_S := $(shell uname -s)
-    PY      := ./.venv/bin/python
     RUN_CMD := ./scripts/run.sh
     ifeq ($(UNAME_S),Darwin)
         HOST_OS := macos
@@ -54,7 +50,7 @@ help:
 	@echo "  make build-windows  Build a Windows .exe   (must run on Windows)"
 
 test:
-	$(PY) -m pytest tests/ -q
+	python -m pytest tests/ -q
 
 run:
 	$(RUN_CMD)

@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
+# Launch mp3-yt-cutter using whichever `python` is on PATH.
+#
+# Assumes the project virtualenv is already active (so `python` resolves to
+# the venv interpreter with PySide6/yt-dlp/mutagen installed). See the
+# "Setup" section of the README for one-time environment setup.
+
 set -euo pipefail
 cd "$(dirname "$0")/.."
-
-if [[ ! -d .venv ]]; then
-  echo "Creating virtualenv in .venv ..." >&2
-  python3 -m venv .venv
-  ./.venv/bin/pip install --upgrade pip >/dev/null
-  ./.venv/bin/pip install -r requirements.txt
-  ./.venv/bin/pip install -e . >/dev/null
-fi
-
-exec ./.venv/bin/python -m mp3yt "$@"
+exec python -m mp3yt "$@"

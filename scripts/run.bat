@@ -1,18 +1,10 @@
 @echo off
+REM Launch mp3-yt-cutter using whichever `python` is on PATH.
+REM
+REM Assumes the project virtualenv is already active (so `python` resolves
+REM to the venv interpreter with PySide6/yt-dlp/mutagen installed). See the
+REM "Setup" section of the README for one-time environment setup.
+
 setlocal
 cd /d "%~dp0\.."
-
-if not exist ".venv\Scripts\python.exe" (
-  echo Creating virtualenv in .venv ...
-  python -m venv .venv || goto :err
-  ".venv\Scripts\python.exe" -m pip install --upgrade pip >nul || goto :err
-  ".venv\Scripts\python.exe" -m pip install -r requirements.txt || goto :err
-  ".venv\Scripts\python.exe" -m pip install -e . >nul || goto :err
-)
-
-".venv\Scripts\python.exe" -m mp3yt %*
-goto :eof
-
-:err
-echo Failed to set up environment.
-exit /b 1
+python -m mp3yt %*

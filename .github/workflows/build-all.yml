@@ -1,22 +1,23 @@
 name: Build All
 
 # One-stop workflow that builds Windows, Linux, and macOS in parallel and
-# (on tag push) attaches all three artifacts to a single GitHub Release.
+# (when a GitHub Release is published) attaches all three artifacts to it.
 #
 # Triggers:
 #   * Manual run from the Actions tab ("Run workflow") -- builds all three,
-#     uploads them as artifacts on the run page, but does NOT create a release.
-#   * Pushing a tag like v0.1.0 -- builds all three and creates/updates the
-#     matching GitHub Release with all three artifacts attached.
+#     uploads them as run artifacts on the run page, but does NOT touch
+#     any release.
+#   * Publishing a GitHub Release in the UI (or via `gh release create`) --
+#     builds all three and uploads the archives to that release. Tags are
+#     intentionally managed from GitHub, not pushed via local git.
 #
 # The per-platform workflows (build-windows.yml, build-linux.yml,
 # build-macos.yml) are reusable workflows; they remain individually
 # triggerable from the Actions tab if you ever want to test just one platform.
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [published]
 
 jobs:
   build-windows:
@@ -31,15 +32,15 @@ jobs:
     name: macOS
     uses: ./.github/workflows/build-macos.yml
 
-  release:
-    name: Publish GitHub Release
+  upload:
+    name: Upload artifacts to GitHub Release
     needs: [build-windows, build-linux, build-macos]
-    # Only create a release when triggered by a `v*` tag push. On manual
-    # workflow_dispatch we just leave the artifacts on the run page.
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Only attach files when this run was triggered by publishing a release.
+    # On manual workflow_dispatch we just leave the artifacts on the run page.
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # required to create/update the release
+      contents: write   # required to upload assets to the release
 
     steps:
       - name: Download all platform artifacts
@@ -55,13 +56,14 @@ jobs:
       - name: List collected files
         run: ls -la release-files
 
-      - name: Create or update GitHub Release
+      - name: Attach archives to the release
         uses: softprops/action-gh-release@v2
         with:
-          # github.ref_name is the tag (e.g. "v0.1.0") on a tag-push trigger.
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          generate_release_notes: true
+          # The release was created by a human in the UI (or via
+          # `gh release create`); we only upload assets to it. Don't pass
+          # `name` or `body` -- that would overwrite what the release author
+          # wrote.
+          tag_name: ${{ github.event.release.tag_name }}
           files: |
             release-files/mp3-yt-cutter-windows.zip
             release-files/mp3-yt-cutter-linux-x86_64.tar.gz
