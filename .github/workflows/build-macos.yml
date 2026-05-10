@@ -86,6 +86,23 @@ jobs:
           wait "$PID" 2>/dev/null || true
           echo "App started cleanly."
 
+      - name: Smoke test bundled ffmpeg
+        run: |
+          set -euo pipefail
+          for tool in ffmpeg ffprobe; do
+            path="$(find dist/yt2mp3slicer.app -type f -name "$tool" -perm -111 | head -n1)"
+            if [[ -z "$path" ]]; then
+              echo "::error::Bundled $tool not found or not executable"
+              exit 1
+            fi
+            "$path" -version >/dev/null
+            if otool -L "$path" | grep -E '/(usr/local|opt/homebrew)/' >/dev/null; then
+              echo "::error::Bundled $tool still links to Homebrew paths:"
+              otool -L "$path"
+              exit 1
+            fi
+          done
+
       - name: Zip the .app
         # `ditto` preserves resource forks and Frameworks/ symlinks where
         # `zip` / Compress-Archive break the bundle.

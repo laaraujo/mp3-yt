@@ -84,6 +84,21 @@ if [[ ! -d "$APP" ]]; then
   exit 1
 fi
 
+echo "Verifying bundled ffmpeg tools..."
+for tool in ffmpeg ffprobe; do
+  tool_path="$(find "$APP" -type f -name "$tool" -perm -111 | head -n1)"
+  if [[ -z "$tool_path" ]]; then
+    echo "Bundled $tool not found or not executable." >&2
+    exit 1
+  fi
+  "$tool_path" -version >/dev/null
+  if otool -L "$tool_path" | grep -E '/(usr/local|opt/homebrew)/' >/dev/null; then
+    echo "Bundled $tool still links to Homebrew paths:" >&2
+    otool -L "$tool_path" >&2
+    exit 1
+  fi
+done
+
 ARCH="$(uname -m)"
 ZIP="dist/yt2mp3slicer-macos-${ARCH}.zip"
 

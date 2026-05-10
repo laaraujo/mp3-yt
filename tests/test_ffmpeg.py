@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from slicer.core.ffmpeg import FfmpegNotFoundError, _subprocess_startup_kwargs, find_binaries
+from slicer.core.ffmpeg import (
+    FfmpegBinaries,
+    FfmpegNotFoundError,
+    _subprocess_startup_kwargs,
+    ensure_binaries_runnable,
+    find_binaries,
+    prepend_to_path,
+)
 
 
 def test_find_binaries_uses_env_override(tmp_path, monkeypatch):
@@ -59,3 +68,42 @@ def test_subprocess_startup_kwargs_hides_windows_console(monkeypatch):
     assert kwargs["creationflags"] == 0x08000000
     assert kwargs["startupinfo"].dwFlags == 1
     assert kwargs["startupinfo"].wShowWindow == 0
+
+
+def test_prepend_to_path_adds_directory_once(monkeypatch, tmp_path):
+    monkeypatch.setenv("PATH", "/usr/bin")
+
+    prepend_to_path(tmp_path)
+    prepend_to_path(tmp_path)
+
+    assert os.environ["PATH"] == f"{tmp_path}{os.pathsep}/usr/bin"
+
+
+def test_ensure_binaries_runnable_checks_ffmpeg_and_ffprobe(tmp_path, monkeypatch):
+    ffmpeg = tmp_path / "ffmpeg"
+    ffprobe = tmp_path / "ffprobe"
+    ffmpeg.write_text("")
+    ffprobe.write_text("")
+    ffmpeg.chmod(0o755)
+    ffprobe.chmod(0o755)
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    ensure_binaries_runnable(FfmpegBinaries(ffmpeg=str(ffmpeg), ffprobe=str(ffprobe)))
+
+    assert calls == [[str(ffmpeg), "-version"], [str(ffprobe), "-version"]]
+
+
+def test_ensure_binaries_runnable_rejects_non_executable(tmp_path):
+    ffmpeg = tmp_path / "ffmpeg"
+    ffprobe = tmp_path / "ffprobe"
+    ffmpeg.write_text("")
+    ffprobe.write_text("")
+
+    with pytest.raises(FfmpegNotFoundError, match="not executable"):
+        ensure_binaries_runnable(FfmpegBinaries(ffmpeg=str(ffmpeg), ffprobe=str(ffprobe)))

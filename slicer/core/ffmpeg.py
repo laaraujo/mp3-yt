@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -55,6 +56,15 @@ def _bundled_search_paths() -> list[Path]:
 
 def _binary_name(name: str) -> str:
     return f"{name}.exe" if sys.platform.startswith("win") else name
+
+
+def prepend_to_path(directory: str | Path) -> None:
+    """Ensure child processes can discover bundled command-line tools."""
+    entry = str(directory)
+    existing = os.environ.get("PATH", "")
+    parts = existing.split(os.pathsep) if existing else []
+    if entry not in parts:
+        os.environ["PATH"] = entry if not existing else f"{entry}{os.pathsep}{existing}"
 
 
 def _subprocess_startup_kwargs() -> dict:
@@ -102,6 +112,34 @@ def find_binaries() -> FfmpegBinaries:
         )
     assert ffmpeg and ffprobe  # for type checkers
     return FfmpegBinaries(ffmpeg=ffmpeg, ffprobe=ffprobe)
+
+
+def _check_runnable(cmd: Sequence[str]) -> None:
+    subprocess.run(
+        [*cmd, "-version"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        **_subprocess_startup_kwargs(),
+    )
+
+
+def ensure_binaries_runnable(bins: FfmpegBinaries) -> None:
+    """Fail early if located binaries exist but cannot be executed."""
+    for name, path in (("ffmpeg", bins.ffmpeg), ("ffprobe", bins.ffprobe)):
+        binary = Path(path)
+        if not binary.is_file():
+            raise FfmpegNotFoundError(f"{name} was found at {binary}, but it is not a file.")
+        if not os.access(binary, os.X_OK):
+            raise FfmpegNotFoundError(f"{name} was found at {binary}, but it is not executable.")
+
+        try:
+            _check_runnable([str(binary)])
+        except subprocess.TimeoutExpired as exc:
+            raise FfmpegNotFoundError(f"{name} at {binary} did not respond to '-version'.") from exc
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise FfmpegNotFoundError(f"{name} was found at {binary}, but could not be run: {exc}") from exc
 
 
 def probe_duration(path: Path, *, bins: FfmpegBinaries | None = None) -> float:
