@@ -6,6 +6,7 @@ ffmpeg and the network are stubbed; we call ``_cut_all`` directly.
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -139,3 +140,41 @@ def test_cut_all_falls_back_to_output_dir_when_album_blank(
     ok, msg = captured["finished"]
     assert ok is True
     assert str(tmp_path) in msg
+
+
+def test_pipeline_failure_emits_copyable_details_without_logging_traceback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job = CutJob(
+        youtube_url="https://www.youtube.com/watch?v=broken",
+        album="Broken Album",
+        artist="Broken Artist",
+        tracklist_text="0:00 Intro\n1:00 Outro",
+        output_dir=tmp_path,
+    )
+    worker = PipelineWorker(job)
+    captured: dict[str, Any] = {"finished": None, "logs": [], "details": None}
+
+    monkeypatch.setattr(ffmpeg_mod, "find_binaries", lambda: SimpleNamespace(ffmpeg="/tmp/ffmpeg"))
+    monkeypatch.setattr(ffmpeg_mod, "configure_subprocess_environment", lambda _ffmpeg_dir: None)
+    monkeypatch.setattr(ffmpeg_mod, "ensure_binaries_runnable", lambda _bins: None)
+    monkeypatch.setattr(
+        workers,
+        "download_as_mp3",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("network timed out")),
+    )
+
+    worker.finished.connect(lambda ok, msg: captured.__setitem__("finished", (ok, msg)))
+    worker.logLine.connect(lambda line: captured["logs"].append(line))
+    worker.failureDetails.connect(lambda details: captured.__setitem__("details", details))
+
+    worker._run_inner()
+
+    assert captured["finished"] == (False, "Error: network timed out")
+    assert len(captured["logs"]) == 1
+    assert captured["logs"][0].startswith("Downloading from YouTube to ")
+    assert not any("Traceback" in line for line in captured["logs"])
+    assert "Traceback:" in captured["details"]
+    assert "network timed out" in captured["details"]
+    assert "https://www.youtube.com/watch?v=broken" in captured["details"]

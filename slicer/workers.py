@@ -69,6 +69,8 @@ class PipelineWorker(QObject):
     # idx (1-based), total, title, ok, message
     trackFinished = Signal(int, int, str, bool, str)
     logLine = Signal(str)
+    # Detailed diagnostic text for unexpected failures; emitted before finished.
+    failureDetails = Signal(str)
     # success: bool, summary message
     finished = Signal(bool, str)
 
@@ -92,9 +94,8 @@ class PipelineWorker(QObject):
         try:
             self._run_inner()
         except Exception as exc:  # pragma: no cover - last-resort guard
-            tb = traceback.format_exc()
-            self.logLine.emit(tb)
-            self.finished.emit(False, f"Unexpected error: {exc}")
+            msg = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
+            self._emit_failure(f"Unexpected error: {msg}", exc)
 
     def _run_inner(self) -> None:
         job = self._job
@@ -148,13 +149,31 @@ class PipelineWorker(QObject):
             self.finished.emit(False, "Cancelled.")
             return
         except Exception as exc:
-            tb = traceback.format_exc()
-            self.logLine.emit(tb)
             msg = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
-            self.finished.emit(False, f"Error: {msg}")
+            self._emit_failure(f"Error: {msg}", exc)
             return
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def _emit_failure(self, summary: str, exc: Exception) -> None:
+        """Emit a short user-facing failure plus copyable diagnostic details."""
+        job = self._job
+        details = "\n".join(
+            [
+                summary,
+                "",
+                "Context:",
+                f"  URL: {job.youtube_url}",
+                f"  Album: {job.album}",
+                f"  Artist: {job.artist}",
+                f"  Output folder: {job.output_dir}",
+                "",
+                "Traceback:",
+                "".join(traceback.format_exception(exc)),
+            ]
+        )
+        self.failureDetails.emit(details)
+        self.finished.emit(False, summary)
 
     def _cut_all(
         self,

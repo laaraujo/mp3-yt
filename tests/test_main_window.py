@@ -110,3 +110,20 @@ def test_fetching_new_url_replaces_previous_album_and_artist(qapp: QApplication)
         assert window.artist_edit.text() == "Second Artist"
     finally:
         window.close()
+
+
+def test_track_result_updates_cutting_status_message(qapp: QApplication) -> None:
+    window = MainWindow()
+    try:
+        window._on_progress(0.5, "Cutting 1/2: Intro")
+
+        assert window.messages.count() == 1
+        assert "[01/02] CUT   Intro" in window.messages.item(0).text()
+
+        window._on_track_finished(1, 2, "Intro", True, "/tmp/Intro.mp3")
+
+        assert window.messages.count() == 1
+        assert "[01/02] OK    Intro" in window.messages.item(0).text()
+        assert window.messages.item(0).toolTip() == "/tmp/Intro.mp3"
+    finally:
+        window.close()

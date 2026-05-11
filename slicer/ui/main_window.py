@@ -70,6 +70,9 @@ class MainWindow(QMainWindow):
         # replace stale album/artist values; a repeat fetch should not
         # clobber manual edits for the same video.
         self._last_metadata_url: str | None = None
+        # Copyable diagnostic text for the most recent unexpected worker
+        # failure. Kept out of the Messages list to avoid dumping tracebacks.
+        self._last_failure_details: str | None = None
         # Whether the URL field currently holds a valid YouTube video URL.
         # Drives the rest of the form via ``_refresh_form_state``.
         self._url_is_valid: bool = False
@@ -268,6 +271,9 @@ class MainWindow(QMainWindow):
         self.messages.clear()
         self._last_progress_msg = None
         self._live_message_item = None
+        self._track_message_item = None
+        self._track_message_key = None
+        self._last_failure_details = None
         self.progress.setValue(0)
         # Prefer the cached title (from a previous Fetch) for a friendly id.
         title = self._titles_by_url.get(url)
@@ -291,6 +297,7 @@ class MainWindow(QMainWindow):
         self._worker.progressDetail.connect(self._update_live_message)
         self._worker.trackFinished.connect(self._on_track_finished)
         self._worker.logLine.connect(self._append_log)
+        self._worker.failureDetails.connect(self._on_failure_details)
         self._worker.finished.connect(self._on_finished)
 
         self._refresh_form_state()
@@ -427,6 +434,8 @@ class MainWindow(QMainWindow):
         # End the current live-line run so the next live tick creates a
         # fresh item rather than overwriting this one.
         self._live_message_item = None
+        self._track_message_item = None
+        self._track_message_key = None
         if was_at_bottom:
             self.messages.scrollToBottom()
 
@@ -457,22 +466,64 @@ class MainWindow(QMainWindow):
         # Hooks fire on every byte tick; only log when the phase changes.
         if msg and msg != self._last_progress_msg:
             self._last_progress_msg = msg
+            track_status = self._parse_cutting_message(msg)
+            if track_status is not None:
+                idx, total, title = track_status
+                self._show_track_status(idx, total, title)
+                return
             self._append_message(msg)
 
     def _on_track_finished(self, idx: int, total: int, title: str, ok: bool, msg: str) -> None:
         marker = "OK  " if ok else "FAIL"
         text = f"[{idx:02d}/{total:02d}] {marker}  {title}"
-        self._append_message(
-            text,
-            kind="success" if ok else "error",
-            tooltip=msg,
-        )
+        kind: MessageKind = "success" if ok else "error"
+
+        was_at_bottom = self._messages_at_bottom()
+        if self._track_message_item is not None and self._track_message_key == (idx, total):
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self._track_message_item.setText(f"[{timestamp}]  {text}")
+            self._track_message_item.setForeground(_MESSAGE_COLORS[kind])
+            self._track_message_item.setToolTip(msg)
+            self._track_message_item = None
+            self._track_message_key = None
+            if was_at_bottom:
+                self.messages.scrollToBottom()
+            return
+
+        self._append_message(text, kind=kind, tooltip=msg)
+
+    @staticmethod
+    def _parse_cutting_message(msg: str) -> tuple[int, int, str] | None:
+        prefix = "Cutting "
+        if not msg.startswith(prefix):
+            return None
+        try:
+            counts, title = msg[len(prefix) :].split(": ", 1)
+            idx_text, total_text = counts.split("/", 1)
+            return int(idx_text), int(total_text), title
+        except ValueError:
+            return None
+
+    def _show_track_status(self, idx: int, total: int, title: str) -> None:
+        was_at_bottom = self._messages_at_bottom()
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        item = QListWidgetItem(f"[{timestamp}]  [{idx:02d}/{total:02d}] CUT   {title}")
+        item.setForeground(_MESSAGE_COLORS["info"])
+        self.messages.addItem(item)
+        self._live_message_item = None
+        self._track_message_item = item
+        self._track_message_key = (idx, total)
+        if was_at_bottom:
+            self.messages.scrollToBottom()
 
     def _append_log(self, text: str) -> None:
         for line in text.splitlines() or [text]:
             line = line.rstrip()
             if line:
                 self._append_message(line)
+
+    def _on_failure_details(self, details: str) -> None:
+        self._last_failure_details = details
 
     def _on_finished(self, ok: bool, msg: str) -> None:
         # Tear down first so the modal opens against a re-enabled form.
@@ -484,7 +535,7 @@ class MainWindow(QMainWindow):
         if ok:
             QMessageBox.information(self, "Done", msg)
         elif not cancelled:
-            QMessageBox.warning(self, "Finished with issues", msg)
+            self._show_failure_dialog(msg)
 
     def _teardown_thread(self) -> None:
         if self._thread is not None:
@@ -550,6 +601,24 @@ class MainWindow(QMainWindow):
 
     def _error(self, msg: str) -> None:
         QMessageBox.warning(self, "Missing input", msg)
+
+    def _show_failure_dialog(self, msg: str) -> None:
+        details = self._last_failure_details
+        if not details:
+            QMessageBox.warning(self, "Finished with issues", msg)
+            return
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Finished with issues")
+        box.setText("The job failed before it could finish.")
+        box.setInformativeText(msg)
+        box.setDetailedText(details)
+        box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        copy_button = box.addButton("Copy Details", QMessageBox.ButtonRole.ActionRole)
+        box.exec()
+        if box.clickedButton() == copy_button:
+            QApplication.clipboard().setText(details)
 
     def closeEvent(self, event) -> None:
         if self._thread is not None and self._thread.isRunning():
